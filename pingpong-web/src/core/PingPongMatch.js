@@ -41,7 +41,7 @@ export class Player {
         this.currentTactic = 'normal';
         this.consecutiveWins = 0;
         this.usedTacticsInFixture = [];
-        if (this.currentStamina === undefined) this.currentStamina = this.stats.stamina;
+        if (this.currentStamina == null) this.currentStamina = this.stats.stamina;
     }
 
     /** 记录一盘比赛中使用的战术 */
@@ -65,6 +65,7 @@ export class Player {
 
     /** 应用一盘比赛的体力消耗 */
     applyFixtureStaminaCost() {
+        if (this.currentStamina == null) this.currentStamina = this.stats.stamina;
         const cost = this.calcFixtureStaminaCost();
         this.currentStamina = Math.max(0, this.currentStamina - cost);
     }
@@ -81,6 +82,7 @@ export class Player {
     applyPassiveSkills() {
         Object.assign(this.stats, this._baseStats);
         this.currentMentality = this.stats.mentality;
+        if (this.currentStamina == null) this.currentStamina = this.stats.stamina;
         this.skills.forEach(skillId => {
             const skill = SKILLS[skillId];
             if (skill?.onBeforeCalc) skill.onBeforeCalc(this);
@@ -484,20 +486,26 @@ export class TeamMatch {
         fixture.match = new SeriesMatch(fixture.home, fixture.away);
         fixture.match.log = (msg) => this.log(msg);
 
-        // 未上场的板凳球员恢复15%体力
-        this.homeRoster.forEach(p => {
-            if (p !== fixture.home && p !== fixture.away) {
-                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina || p.stats.stamina) + p.stats.stamina * 0.15);
+        // 所有队员在下一盘开始前恢复体力
+        // 刚打完的恢复5%，坐板凳的恢复15%
+        const allPlayers = [...new Set([...this.homeRoster, ...this.awayRoster])];
+        allPlayers.forEach(p => {
+            const isPlaying = p === fixture.home || p === fixture.away;
+            const isPreviouslyPlayed = this.currentFixtureIndex > 0 &&
+                this.fixtures.slice(0, this.currentFixtureIndex).some(f => f.home === p || f.away === p);
+            if (isPlaying && isPreviouslyPlayed) {
+                // 连续上场：微恢复5%
+                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina != null ? p.currentStamina : p.stats.stamina) + p.stats.stamina * 0.05);
+            } else if (!isPlaying) {
+                // 坐板凳：恢复15%
+                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina != null ? p.currentStamina : p.stats.stamina) + p.stats.stamina * 0.15);
             }
-        });
-        this.awayRoster.forEach(p => {
-            if (p !== fixture.home && p !== fixture.away) {
-                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina || p.stats.stamina) + p.stats.stamina * 0.15);
-            }
+            // 首次上场不恢复（体力是满的）
         });
 
         this.log(`\n======================================================`);
         this.log(`【第 ${fixture.id} 盘比赛开始】 ${fixture.home.name} vs ${fixture.away.name}`);
+        this.log(`   体力: ${fixture.home.name} ${Math.floor(fixture.home.currentStamina||0)} | ${fixture.away.name} ${Math.floor(fixture.away.currentStamina||0)}`);
         this.log(`======================================================`);
 
         return fixture;

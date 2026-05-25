@@ -416,7 +416,7 @@ const resetToMenu = () => {
      }
   }
 
-  // 3. 轮间体力恢复（不是满血复活，恢复40%已消耗体力）
+  // 3. 轮间体力恢复（固定恢复10点，不会回满）
   myTeamPlayers.value.forEach(p => p.roundRecovery())
   leagueTeams.value.forEach(t => {
     if (t.id !== 'team_mine') {
