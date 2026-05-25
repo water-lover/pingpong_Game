@@ -181,7 +181,7 @@ function getRNG(tid) {
 }
 
 function getStaminaCost(player, mult) {
-    let c = TACTICS[player.currentTactic].staCost * mult * 0.15;
+    let c = TACTICS[player.currentTactic].staCost * mult * 0.02;
     if (player.skills.includes('大力神')) c = SKILLS['大力神'].onStaminaCost(c);
     if (player.skills.includes('常青树')) c = SKILLS['常青树'].onStaminaCost(c);
     return c;
@@ -505,7 +505,7 @@ export class TeamMatch {
 
         this.log(`\n======================================================`);
         this.log(`【第 ${fixture.id} 盘比赛开始】 ${fixture.home.name} vs ${fixture.away.name}`);
-        this.log(`   体力: ${fixture.home.name} ${Math.floor(fixture.home.currentStamina||0)} | ${fixture.away.name} ${Math.floor(fixture.away.currentStamina||0)}`);
+        this.log(`   体力: ${fixture.home.name} ${Math.floor(fixture.home.currentStamina || 0)} | ${fixture.away.name} ${Math.floor(fixture.away.currentStamina || 0)}`);
         this.log(`======================================================`);
 
         return fixture;
