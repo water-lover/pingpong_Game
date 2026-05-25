@@ -278,6 +278,13 @@ export const SKILLS = {
             player.currentMentality = Math.min(100, player.currentMentality + 5);
             player.stats.stamina += 3;
         }
+    },
+
+    /** 瓦尔德内尔: 游击队长 — 每局随机切换战术，战术效果+8% */
+    游击队长: {
+        name: '游击队长',
+        desc: '每局随机换战术，效果+8%',
+        onTacticChange(player, baseStrength) { return baseStrength * 1.08; }
     }
 };
 
@@ -291,6 +298,7 @@ export function getPlayerSkills(playerName) {
         '张继科': ['藏獒觉醒'],
         '王楚钦': ['发球鬼才'],
         '刘国梁': ['智多星'],
+        '瓦尔德内尔': ['游击队长'],
         '马琳': ['战术大师'],
         '许昕': ['神仙球'],
         '王励勤': ['大力神'],

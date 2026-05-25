@@ -14,6 +14,24 @@ const showOpponentRoster = ref(false) // 对手大名单
 
 const skillList = computed(() => Object.entries(SKILLS).map(([id, s]) => ({ id, name: s.name, desc: s.desc })))
 
+/** 反向查询：技能名 → 拥有该技能的球员列表 */
+const skillToPlayers = computed(() => {
+  const map = {}
+  const allPlayers = [...freeAgentsPool]
+  leagueTeams.value.forEach(t => { if (t.id !== 'team_mine') allPlayers.push(...t.players) })
+  myTeamPlayers.value.forEach(p => { if (!allPlayers.includes(p)) allPlayers.push(p) })
+  allPlayers.forEach(p => {
+    (p.skills || []).forEach(sid => {
+      const skill = SKILLS[sid]
+      if (skill) {
+        if (!map[skill.name]) map[skill.name] = []
+        if (!map[skill.name].includes(p.name)) map[skill.name].push(p.name)
+      }
+    })
+  })
+  return map
+})
+
 // 我的球队
 const myTeamPlayers = ref([])
 const leagueTeams = ref(leagueAICaching)
@@ -799,11 +817,12 @@ const resetGame = () => {
       <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
         <h3>📖 球员技能大全</h3>
         <table class="skill-table">
-          <thead><tr><th>技能名</th><th>效果</th></tr></thead>
+          <thead><tr><th>技能名</th><th>效果</th><th>拥有球员</th></tr></thead>
           <tbody>
             <tr v-for="s in skillList" :key="s.id">
               <td><strong>{{ s.name }}</strong></td>
               <td>{{ s.desc }}</td>
+              <td>{{ (skillToPlayers[s.name] || []).join('、') }}</td>
             </tr>
           </tbody>
         </table>

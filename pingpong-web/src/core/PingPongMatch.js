@@ -35,10 +35,10 @@ export class Player {
         if (this.currentStamina === undefined) this.currentStamina = this.stats.stamina;
     }
 
-    /** 轮间体力恢复 —— 每轮恢复40%已消耗体力 */
+    /** 轮间体力恢复 —— 每轮恢复60%已消耗体力 */
     roundRecovery() {
         const spent = this.stats.stamina - this.currentStamina;
-        this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + spent * 0.4);
+        this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + spent * 0.6);
     }
 
     rerollForm() {
@@ -441,6 +441,18 @@ export class TeamMatch {
         const fixture = this.fixtures[this.currentFixtureIndex];
         fixture.match = new SeriesMatch(fixture.home, fixture.away);
         fixture.match.log = (msg) => this.log(msg);
+
+        // 未上场的板凳球员恢复15%体力
+        this.homeRoster.forEach(p => {
+            if (p !== fixture.home && p !== fixture.away) {
+                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina || p.stats.stamina) + p.stats.stamina * 0.15);
+            }
+        });
+        this.awayRoster.forEach(p => {
+            if (p !== fixture.home && p !== fixture.away) {
+                p.currentStamina = Math.min(p.stats.stamina, (p.currentStamina || p.stats.stamina) + p.stats.stamina * 0.15);
+            }
+        });
 
         this.log(`\n======================================================`);
         this.log(`【第 ${fixture.id} 盘比赛开始】 ${fixture.home.name} vs ${fixture.away.name}`);
