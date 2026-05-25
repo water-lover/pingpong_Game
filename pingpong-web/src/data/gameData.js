@@ -30,7 +30,6 @@ export const freeAgentsPool = [
     new plainPlayer('萨姆索诺夫', { serve: 94, receive: 93, forehand: 98, backhand: 90, rally: 98, stamina: 88, mentality: 98, price: 800 }),
     new plainPlayer('马琳', { serve: 100, receive: 98, forehand: 97, backhand: 82, rally: 82, stamina: 80, mentality: 96, price: 800 }),
     new plainPlayer('波尔', { serve: 93, receive: 93, forehand: 95, backhand: 95, rally: 97, stamina: 88, mentality: 95, price: 800 }),
-    new plainPlayer('科曼', { serve: 92, receive: 93, forehand: 93, backhand: 96, rally: 93, stamina: 97, mentality: 92, price: 800 }),
 
     // ═══ Price 700 ═══
     new plainPlayer('奥恰洛夫', { serve: 92, receive: 92, forehand: 91, backhand: 97, rally: 95, stamina: 93, mentality: 93, price: 700 }),

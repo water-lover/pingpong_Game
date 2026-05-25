@@ -2,12 +2,17 @@
 import { ref, computed } from 'vue'
 import { Player, TeamMatch } from './core/PingPongMatch.js'
 import { freeAgentsPool, leagueAICaching } from './data/gameData.js'
+import { SKILLS } from './core/HiddenSkills.js'
 
 // ==========================================
 // ====== 数据与状态 ======
-const MAX_ROUNDS = 12 // 联赛总轮数（每队打4次循环）
-const appState = ref('drafting') // 'drafting' | 'league' | 'scout' | 'roster' | 'match' | 'champion'
+const MAX_ROUNDS = 12
+const appState = ref('drafting')
 const logs = ref([])
+const showSkillBook = ref(false) // 技能查询表
+const showOpponentRoster = ref(false) // 对手大名单
+
+const skillList = computed(() => Object.entries(SKILLS).map(([id, s]) => ({ id, name: s.name, desc: s.desc })))
 
 // 我的球队
 const myTeamPlayers = ref([])
@@ -393,8 +398,26 @@ const resetToMenu = () => {
      }
   }
 
-  // 3. 恢复全队体力与数据重置
-  myTeamPlayers.value.forEach(p => p.resetMatchStates())
+  // 3. 轮间体力恢复（不是满血复活，恢复40%已消耗体力）
+  myTeamPlayers.value.forEach(p => p.roundRecovery())
+  leagueTeams.value.forEach(t => {
+    if (t.id !== 'team_mine') {
+      t.players.forEach(p => p.roundRecovery());
+      // AI赚点小钱并可能从自由市场买人
+      t.gold = (t.gold || 1000) + 100;
+      // AI有30%概率从自由市场买人补充（如果还有名额）
+      if (t.players.length < 5 && scoutPoolPlayers.value.length > 0 && Math.random() < 0.3) {
+        let affordable = scoutPoolPlayers.value.filter(sp => sp.stats.price <= t.gold);
+        if (affordable.length > 0) {
+          affordable.sort((a, b) => (b.stats.serve + b.stats.receive + b.stats.forehand + b.stats.backhand) - (a.stats.serve + a.stats.receive + a.stats.forehand + a.stats.backhand));
+          const pick = affordable[0];
+          t.gold -= pick.stats.price;
+          t.players.push(pick);
+          scoutPoolPlayers.value = scoutPoolPlayers.value.filter(sp => sp !== pick);
+        }
+      }
+    }
+  })
   
   currentRound.value++
   saveGame()
@@ -458,6 +481,7 @@ const resetGame = () => {
             <li>发球: {{ p.stats.serve }} | 接发: {{ p.stats.receive }}</li>
             <li>正手: {{ p.stats.forehand }} | 反手: {{ p.stats.backhand }}</li>
             <li>相持: {{ p.stats.rally }} | 体能: {{ p.stats.stamina }} | 心态: {{ p.stats.mentality }}</li>
+            <li v-if="p.skills?.length">✨ 技能: {{ p.skills.map(s => SKILLS[s]?.name).join('、') }}</li>
           </ul>
         </div>
       </div>
@@ -536,10 +560,14 @@ const resetGame = () => {
         </div>
 
         <div class="my-team-box box-panel">
-          <h3>我的阵容 <button class="btn-secondary" style="float: right; padding: 5px 10px;" @click="openScout">🔍 球探与转会</button></h3>
+          <h3>我的阵容 
+            <button class="btn-secondary" style="float: right; padding: 5px 10px; margin-left: 5px;" @click="showSkillBook = true">📖 技能</button>
+            <button class="btn-secondary" style="float: right; padding: 5px 10px;" @click="openScout">🔍 球探</button>
+          </h3>
           <div class="roster-list">
-            <div class="player-pill" v-for="p in myTeamPlayers" :key="p.name" title="各项初始能力值">
-               {{ p.name }} (综合: {{ Math.floor((p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand)/4) }})
+            <div class="player-pill" v-for="p in myTeamPlayers" :key="p.name" :title="'当前体力: ' + Math.floor(p.currentStamina) + '/' + p.stats.stamina">
+               {{ p.name }} <span class="sta-bar"><span class="sta-fill" :style="{width: (p.currentStamina/p.stats.stamina*100)+'%'}"></span></span>
+               <span class="sta-num">{{ Math.floor(p.currentStamina) }}/{{ p.stats.stamina }}</span>
             </div>
             <div style="font-size: 13px; color: #888; margin-top: 8px;">
               队伍人数: {{ myTeamPlayers.length }} / {{ MAX_TEAM_SIZE }}
@@ -621,7 +649,9 @@ const resetGame = () => {
         <button class="btn-back" @click="appState = 'league'">← 返回联赛</button>
         <h3>赛前更衣室 - 排兵布阵</h3>
       </div>
-      <p class="desc">请点击球员进入槽位（再次点击已选中球员可移出）。你即将对阵：<strong>{{ getNextOpponent().name }}</strong></p>
+      <p class="desc">请点击球员进入槽位（再次点击已选中球员可移出）。你即将对阵：<strong>{{ getNextOpponent().name }}</strong>
+        <button class="btn-link" @click="showOpponentRoster = true">📋 查看对手大名单</button>
+      </p>
       
       <!-- 出场槽位 -->
       <div class="slots-container">
@@ -764,6 +794,41 @@ const resetGame = () => {
 
     </div>
 
+    <!-- ========= 技能查询表 Modal ========= -->
+    <div class="modal-overlay" v-if="showSkillBook" @click.self="showSkillBook = false">
+      <div class="modal-content" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+        <h3>📖 球员技能大全</h3>
+        <table class="skill-table">
+          <thead><tr><th>技能名</th><th>效果</th></tr></thead>
+          <tbody>
+            <tr v-for="s in skillList" :key="s.id">
+              <td><strong>{{ s.name }}</strong></td>
+              <td>{{ s.desc }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="btn-secondary mt" @click="showSkillBook = false" style="margin-top:15px">关闭</button>
+      </div>
+    </div>
+
+    <!-- ========= 对手大名单 Modal ========= -->
+    <div class="modal-overlay" v-if="showOpponentRoster" @click.self="showOpponentRoster = false">
+      <div class="modal-content" style="max-width: 500px;">
+        <h3>📋 {{ getNextOpponent().name }} — 大名单</h3>
+        <div class="draft-pool" style="margin-top:15px;">
+          <div class="player-card" v-for="p in getNextOpponent().players" :key="p.name" style="cursor:default; border:1px solid #ddd;">
+            <h4>{{ p.name }}</h4>
+            <ul class="stats">
+              <li>正手: {{ p.stats.forehand }} | 反手: {{ p.stats.backhand }}</li>
+              <li>相持: {{ p.stats.rally }} | 体能: {{ Math.floor(p.currentStamina) }}/{{ p.stats.stamina }}</li>
+              <li>技能: {{ p.skills?.length ? p.skills.map(s => SKILLS[s]?.name).join('、') : '无' }}</li>
+            </ul>
+          </div>
+        </div>
+        <button class="btn-secondary mt" @click="showOpponentRoster = false" style="margin-top:15px">关闭</button>
+      </div>
+    </div>
+
   </div>
 </template>
 
@@ -856,7 +921,15 @@ button.huge { padding: 15px 40px; font-size: 18px; }
 
 .dashboard { display: flex; gap: 20px; justify-content: center; margin-top: 20px; text-align: left; }
 .box-panel { background: rgba(255,255,255,0.8); border: 2px solid #bdc3c7; border-radius: 8px; padding: 20px; flex: 1; max-width: 450px; }
-.player-pill { background: #ecf0f1; border-radius: 20px; padding: 5px 15px; margin-bottom: 10px; font-weight: bold; }
+.player-pill { background: #ecf0f1; border-radius: 20px; padding: 8px 15px; margin-bottom: 10px; font-weight: bold; display: flex; align-items: center; gap: 8px; }
+.sta-bar { display: inline-block; width: 40px; height: 6px; background: #ddd; border-radius: 3px; overflow: hidden; }
+.sta-fill { height: 100%; background: linear-gradient(90deg, #e74c3c, #f39c12, #2ecc71); border-radius: 3px; transition: width 0.3s; }
+.sta-num { font-size: 11px; color: #888; font-weight: normal; }
+.btn-link { background: none; border: none; color: #3498db; cursor: pointer; font-size: 14px; text-decoration: underline; padding: 0; margin-left: 10px; }
+.btn-link:hover { color: #2980b9; }
+.skill-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
+.skill-table th, .skill-table td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+.skill-table th { background: #f4f6f7; color: #34495e; }
 
 .league-header { display: flex; justify-content: space-between; align-items: center; max-width: 800px; margin: 0 auto; }
 .round-progress-bar {

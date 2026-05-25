@@ -26,12 +26,19 @@ export class Player {
     }
 
     resetMatchStates() {
-        // 恢复原始属性（清除之前可能叠加的技能加成）
+        // 仅重置心态和战术，保留体力（体力跨大场衰减）
         Object.assign(this.stats, this._baseStats);
-        this.currentStamina = this.stats.stamina;
         this.currentMentality = this.stats.mentality;
         this.currentTactic = 'normal';
         this.consecutiveWins = 0;
+        // 如果体力从未初始化，设为满
+        if (this.currentStamina === undefined) this.currentStamina = this.stats.stamina;
+    }
+
+    /** 轮间体力恢复 —— 每轮恢复40%已消耗体力 */
+    roundRecovery() {
+        const spent = this.stats.stamina - this.currentStamina;
+        this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + spent * 0.4);
     }
 
     rerollForm() {
@@ -59,7 +66,7 @@ const TACTICS = {
     },
     aggressive: {
         label: '全线搏杀', weights: { serve: 0.10, receive: 0.10, forehand: 0.38, backhand: 0.22, rally: 0.20 },
-        staCost: 1.5, rngRange: 22, rngShift: -11, serveBonus: 3, rallyBonus: 6, desc: '正手暴击，高失误风险'
+        staCost: 2.0, rngRange: 34, rngShift: -17, serveBonus: 5, rallyBonus: 8, desc: '高风险高回报·易失误'
     },
     conservative: {
         label: '稳扎稳打', weights: { serve: 0.18, receive: 0.22, forehand: 0.15, backhand: 0.20, rally: 0.25 },
