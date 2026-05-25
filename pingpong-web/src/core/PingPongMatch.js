@@ -1,8 +1,6 @@
 import { SKILLS, getPlayerSkills } from './HiddenSkills.js'
 
 export class Player {
-    // name: 球员名称
-    // stats: { serve, receive, forehand, backhand, stamina, mentality }
     constructor(name, stats) {
         this.name = name;
         this.stats = {
@@ -10,35 +8,70 @@ export class Player {
             receive: stats.receive || 50,
             forehand: stats.forehand || 50,
             backhand: stats.backhand || 50,
-            rally: stats.rally || 50, // 相持
+            rally: stats.rally || 50,
             stamina: stats.stamina || 100,
             mentality: stats.mentality || 50,
             price: stats.price || Math.floor(Math.random() * 500) + 500,
         };
         this.teamId = stats.teamId || null;
         this.skills = getPlayerSkills(name);
-        // 保存原始属性快照，防止技能多次叠加
         this._baseStats = { ...this.stats };
+
+        // 体能消耗系数x —— 越强的球员x越低
+        const price = this.stats.price;
+        this.x = price >= 1000 ? 0.75 :
+            price >= 900 ? 0.80 :
+                price >= 800 ? 0.85 :
+                    price >= 700 ? 0.90 :
+                        price >= 600 ? 0.95 :
+                            price >= 500 ? 1.00 :
+                                price >= 400 ? 1.05 : 1.10;
+
         this.form = 1.0;
         this.consecutiveWins = 0;
         this.tacticChangedThisMatch = false;
+        // 统计本盘使用过的战术
+        this.usedTacticsInFixture = [];
         this.resetMatchStates();
     }
 
     resetMatchStates() {
-        // 仅重置心态和战术，保留体力（体力跨大场衰减）
         Object.assign(this.stats, this._baseStats);
         this.currentMentality = this.stats.mentality;
         this.currentTactic = 'normal';
         this.consecutiveWins = 0;
-        // 如果体力从未初始化，设为满
+        this.usedTacticsInFixture = [];
         if (this.currentStamina === undefined) this.currentStamina = this.stats.stamina;
     }
 
-    /** 轮间体力恢复 —— 每轮恢复60%已消耗体力 */
+    /** 记录一盘比赛中使用的战术 */
+    recordTactic(tacticId) {
+        if (!this.usedTacticsInFixture.includes(tacticId)) {
+            this.usedTacticsInFixture.push(tacticId);
+        }
+    }
+
+    /** 计算本盘比赛的体力消耗 */
+    calcFixtureStaminaCost() {
+        // 基础消耗10，根据战术调整
+        const tactics = this.usedTacticsInFixture;
+        let multiplier = 1.0;
+        if (tactics.includes('aggressive') || tactics.includes('rally_focus')) multiplier = 1.5;
+        else if (tactics.includes('first_three')) multiplier = 1.3;
+        else if (tactics.includes('conservative')) multiplier = 0.8;
+
+        return Math.round(10 * multiplier * this.x);
+    }
+
+    /** 应用一盘比赛的体力消耗 */
+    applyFixtureStaminaCost() {
+        const cost = this.calcFixtureStaminaCost();
+        this.currentStamina = Math.max(0, this.currentStamina - cost);
+    }
+
+    /** 轮间体力恢复 —— 固定恢复10点 */
     roundRecovery() {
-        const spent = this.stats.stamina - this.currentStamina;
-        this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + spent * 0.6);
+        this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + 10);
     }
 
     rerollForm() {
@@ -46,7 +79,6 @@ export class Player {
     }
 
     applyPassiveSkills() {
-        // 先恢复基准值，再重新应用被动技能（防止跨局叠加）
         Object.assign(this.stats, this._baseStats);
         this.currentMentality = this.stats.mentality;
         this.skills.forEach(skillId => {
@@ -116,7 +148,7 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
         base = SKILLS['智多星'].onTacticChange(player, base);
 
     base *= player.form;
-    base *= Math.max(0.5, player.currentStamina / Math.max(1, player.stats.stamina));
+    base *= Math.max(0.75, player.currentStamina / Math.max(1, player.stats.stamina));
 
     if (role.includes('comeback') && player.skills.includes('藏獒觉醒'))
         base = SKILLS['藏獒觉醒'].onComeback(player, base);
@@ -147,7 +179,7 @@ function getRNG(tid) {
 }
 
 function getStaminaCost(player, mult) {
-    let c = TACTICS[player.currentTactic].staCost * mult;
+    let c = TACTICS[player.currentTactic].staCost * mult * 0.15;
     if (player.skills.includes('大力神')) c = SKILLS['大力神'].onStaminaCost(c);
     if (player.skills.includes('常青树')) c = SKILLS['常青树'].onStaminaCost(c);
     return c;
@@ -199,15 +231,15 @@ export class GameMatch {
         // 发球直接得分/接发直接得分
         if (adv > 30) {
             this.scorePoint(this.turn === 'A' ? 'A' : 'B');
-            server.currentStamina = Math.max(0, server.currentStamina - 0.5);
-            receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.3);
+            server.currentStamina = Math.max(0, server.currentStamina - 0.3);
+            receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.2);
             this.log(`⚡ [发球得分] ${server.name} 发球直接得分！`);
             this._afterPoint(server === this.playerA); this._finishPoint(); return;
         }
         if (adv < -35) {
             this.scorePoint(this.turn === 'A' ? 'B' : 'A');
-            receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.5);
-            server.currentStamina = Math.max(0, server.currentStamina - 0.3);
+            receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.3);
+            server.currentStamina = Math.max(0, server.currentStamina - 0.2);
             this.log(`💥 [接发得分] ${receiver.name} 接发球抢攻得分！`);
             this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
         }
@@ -330,8 +362,8 @@ export class SeriesMatch {
 
         // 局间恢复
         if (this.gamesHistory.length > 0) {
-            this.playerA.currentStamina = Math.min(this.playerA.stats.stamina, this.playerA.currentStamina + 15);
-            this.playerB.currentStamina = Math.min(this.playerB.stats.stamina, this.playerB.currentStamina + 15);
+            this.playerA.currentStamina = Math.min(this.playerA.stats.stamina, this.playerA.currentStamina + 3);
+            this.playerB.currentStamina = Math.min(this.playerB.stats.stamina, this.playerB.currentStamina + 3);
             // AI每局之间可以调整战术
             if (Math.random() < 0.5) {
                 this._assignAiTactic(this.playerB);
@@ -383,6 +415,10 @@ export class SeriesMatch {
             } else {
                 this.scoreB++;
             }
+            // 记录本局使用的战术
+            this.playerA.recordTactic(this.playerA.currentTactic);
+            this.playerB.recordTactic(this.playerB.currentTactic);
+
             const avgRally = this.currentGame.rallyLengths.length > 0
                 ? (this.currentGame.rallyLengths.reduce((a, b) => a + b, 0) / this.currentGame.rallyLengths.length).toFixed(1)
                 : '?';
@@ -390,11 +426,17 @@ export class SeriesMatch {
                 scoreA: this.currentGame.scoreA,
                 scoreB: this.currentGame.scoreB,
                 avgRallyShots: avgRally,
-                tactA: this.playerA.currentTactic,
-                tactB: this.playerB.currentTactic
             });
             this.log(`>>> 第 ${this.gamesHistory.length} 局结束（均${avgRally}板/分），大比分：${this.playerA.name} ${this.scoreA} : ${this.scoreB} ${this.playerB.name} <<<`);
             this.checkSeriesEnd();
+            // 系列赛结束时，按盘扣除体力
+            if (this.isFinished) {
+                const costA = this.playerA.calcFixtureStaminaCost();
+                const costB = this.playerB.calcFixtureStaminaCost();
+                this.playerA.applyFixtureStaminaCost();
+                this.playerB.applyFixtureStaminaCost();
+                this.log(`[体力] ${this.playerA.name} -${costA} (x=${this.playerA.x}) | ${this.playerB.name} -${costB} (x=${this.playerB.x})`);
+            }
         }
     }
 

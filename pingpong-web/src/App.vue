@@ -826,6 +826,23 @@ const resetGame = () => {
             </tr>
           </tbody>
         </table>
+        <hr style="margin: 20px 0;">
+        <h3>📊 体能消耗系数x</h3>
+        <p style="font-size:13px;color:#888;text-align:left;">每盘消耗 = 10 × 战术倍率 × x。x越低越省体力。</p>
+        <table class="skill-table">
+          <thead><tr><th>价格档</th><th>x系数</th><th>举例</th><th>常规消耗</th><th>搏杀消耗</th></tr></thead>
+          <tbody>
+            <tr><td>1000</td><td><strong>0.75</strong></td><td>樊振东/张继科/马龙</td><td>8</td><td>11</td></tr>
+            <tr><td>900</td><td><strong>0.80</strong></td><td>瓦尔德内尔/王皓</td><td>8</td><td>12</td></tr>
+            <tr><td>800</td><td><strong>0.85</strong></td><td>张本/林昀儒/波尔等</td><td>9</td><td>13</td></tr>
+            <tr><td>700</td><td><strong>0.90</strong></td><td>奥恰/王励勤/刘国梁</td><td>9</td><td>14</td></tr>
+            <tr><td>600</td><td><strong>0.95</strong></td><td>雨果/许昕/林高远等</td><td>10</td><td>14</td></tr>
+            <tr><td>500</td><td><strong>1.00</strong></td><td>弗朗西斯卡/方博</td><td>10</td><td>15</td></tr>
+            <tr><td>400</td><td><strong>1.05</strong></td><td>阿鲁纳</td><td>11</td><td>16</td></tr>
+            <tr><td>200~100</td><td><strong>1.10</strong></td><td>哈基阔/哈基羊</td><td>11</td><td>17</td></tr>
+          </tbody>
+        </table>
+        <p style="font-size:12px;color:#999;text-align:left;margin-top:8px;">战术倍率：搏杀/相持1.5、前三板1.3、稳扎稳打0.8、常规/死盯反手1.0</p>
         <button class="btn-secondary mt" @click="showSkillBook = false" style="margin-top:15px">关闭</button>
       </div>
     </div>
