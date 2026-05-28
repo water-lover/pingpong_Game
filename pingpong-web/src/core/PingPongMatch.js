@@ -50,9 +50,9 @@ export class Player {
         this.resetMatchStates();
     }
 
-    /** 获取训练某项属性所需费用 */
+    /** 获取训练某项属性所需费用（基于真实基础属性，不含技能加成） */
     getTrainCost(statName) {
-        const cur = this.stats[statName];
+        const cur = this._baseStats[statName];
         const max = this._maxStats[statName];
         if (cur >= max || !max) return Infinity;
         return Math.round(100 + (cur - 70) * 15);
@@ -64,10 +64,10 @@ export class Player {
         if (cost === Infinity) return 0;
         const gain = 1 + (Math.random() < 0.3 ? 1 : 0); // 70%概率+1, 30%概率+2
         const max = this._maxStats[statName];
-        const actualGain = Math.min(gain, max - this.stats[statName]);
+        const actualGain = Math.min(gain, max - this._baseStats[statName]);
         if (actualGain <= 0) return 0;
-        this.stats[statName] += actualGain;
-        // 同步更新_baseStats让技能叠加基于训练后数值
+        this._baseStats[statName] += actualGain;
+        this.stats[statName] = this._baseStats[statName];
         this._baseStats[statName] = this.stats[statName];
         return cost;
     }

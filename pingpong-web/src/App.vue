@@ -735,8 +735,8 @@ const resetGame = () => {
                 <strong>{{ p.name }}</strong> <span style="font-size:12px;color:#888;">(潜力上限)</span>
                 <ul class="stats" style="margin:5px 0 0 0;">
                   <li v-for="s in ['serve','receive','forehand','backhand','rally']" :key="s" style="display:inline-block;margin-right:10px;">
-                    {{ {serve:'发球',receive:'接发',forehand:'正手',backhand:'反手',rally:'相持'}[s] }}: {{ p.stats[s] }}/{{ p._maxStats[s]||'∞' }}
-                    <button v-if="p.stats[s] < (p._maxStats[s]||999)" class="train-btn" @click="trainPlayer(p, s)" :title="'训练费用: '+p.getTrainCost(s)+'金'">↑{{ p.getTrainCost(s) }}金</button>
+                    {{ {serve:'发球',receive:'接发',forehand:'正手',backhand:'反手',rally:'相持'}[s] }}: {{ p._baseStats[s] }}/{{ p._maxStats[s]||'∞' }}
+                    <button v-if="p._baseStats[s] < (p._maxStats[s]||999)" class="train-btn" @click="trainPlayer(p, s)" :title="'训练费用: '+p.getTrainCost(s)+'金'">↑{{ p.getTrainCost(s) }}金</button>
                   </li>
                 </ul>
               </div>
