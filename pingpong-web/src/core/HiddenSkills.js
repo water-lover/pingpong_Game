@@ -47,11 +47,15 @@ export const SKILLS = {
         }
     },
 
-    /** 王楚钦: 发球鬼才 — 发球轮全属性+3% */
+    /** 王楚钦: 发球鬼才 — 发球+5，接发+5，发球轮战术效果+8% */
     发球鬼才: {
         name: '发球鬼才',
-        desc: '发球轮全属性+3%',
-        onServe(player, baseStrength) { return baseStrength * 1.03; }
+        desc: '发接发+5，发球轮战术+8%',
+        onBeforeCalc(player) {
+            player.stats.serve += 5;
+            player.stats.receive += 5;
+        },
+        onServe(player, baseStrength) { return baseStrength * 1.08; }
     },
 
     /** 刘国梁: 智多星 — 战术切换后第一局全属性+5% */

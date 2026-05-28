@@ -416,9 +416,6 @@ export class GameMatch {
 
     checkGameEnd() {
         // 标准乒乓球规则：11分制，需领先2分，无上限
-        // 保护机制：禁止11-0，落后方至少得1分
-        if (this.scoreA >= 10 && this.scoreB === 0) { this.scoreB = 1; return; }
-        if (this.scoreB >= 10 && this.scoreA === 0) { this.scoreA = 1; return; }
         if ((this.scoreA >= 11 || this.scoreB >= 11) && Math.abs(this.scoreA - this.scoreB) >= 2) {
             this.isFinished = true;
             this.winner = this.scoreA > this.scoreB ? this.playerA : this.playerB;
