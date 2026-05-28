@@ -1,16 +1,26 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Player, TeamMatch } from './core/PingPongMatch.js'
-import { freeAgentsPool, leagueAICaching } from './data/gameData.js'
+import { freeAgentsPool, leagueAICaching, starterGroups } from './data/gameData.js'
 import { SKILLS } from './core/HiddenSkills.js'
 
-// ==========================================
-// ====== 数据与状态 ======
-const MAX_ROUNDS = 12
-const appState = ref('drafting')
+const MAX_ROUNDS = 15
+const appState = ref('group_select') // group_select → drafting → league → scout → roster → match → champion
 const logs = ref([])
-const showSkillBook = ref(false) // 技能查询表
-const showOpponentRoster = ref(false) // 对手大名单
+const showSkillBook = ref(false)
+const showOpponentRoster = ref(false)
+const showTraining = ref(false)
+
+/** 训练球员 */
+const trainPlayer = (p, stat) => {
+  const cost = p.getTrainCost(stat)
+  if (cost === Infinity) { alert('已达到潜力上限！'); return }
+  if (myTeamGold.value < cost) { alert(`资金不足！需要 ${cost} 金币`); return }
+  myTeamGold.value -= cost
+  const spent = p.trainStat(stat)
+  // 刷新响应式
+  myTeamPlayers.value = [...myTeamPlayers.value]
+}
 
 const skillList = computed(() => Object.entries(SKILLS).map(([id, s]) => ({ id, name: s.name, desc: s.desc })))
 
@@ -37,13 +47,52 @@ const myTeamPlayers = ref([])
 const leagueTeams = ref(leagueAICaching)
 const currentRound = ref(1)
 
-const myTeamGold = ref(1500)
+// 3大分组选择
+const selectedGroup = ref(null)
+const selectGroup = (groupId) => {
+  selectedGroup.value = groupId
+  const chosen = starterGroups.find(g => g.id === groupId)
+  myTeamPlayers.value = chosen.players.map(p => p)
+  // 另外两个组变成独立AI队伍
+  const leftovers = starterGroups.filter(g => g.id !== groupId)
+  const teamNames = ['凌云队', '雷霆队']
+  leftovers.forEach((g, i) => {
+    const teamId = g.id === 'group_2' ? 'team_b' : 'team_c'
+    let team = leagueTeams.value.find(t => t.id === teamId)
+    if (!team) {
+      team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1000, players: [] }
+      leagueTeams.value.push(team)
+      teamStats.value[teamId] = { name: teamNames[i], points: 0, wins: 0, losses: 0 }
+    }
+    team.players = g.players.map(p => { const np = new Player(p.name, {...p.stats}); np.isCore = true; return np })
+  })
+  appState.value = 'drafting'
+}
+
+const myTeamGold = ref(1000)
 const teamStats = ref({
   'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
   'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
   'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0 },
-  'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 }
+  'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 },
+  'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
+  'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
 })
+
+// 6队循环赛：每队与其他5队交手3次 = 15轮
+const schedule = []
+const teamIds = ['team_mine', 'team_jp', 'team_eu', 'team_na', 'team_b', 'team_c']
+for (let cycle = 0; cycle < 3; cycle++) {
+  for (let r = 0; r < 5; r++) {
+    const round = []
+    for (let m = 0; m < 3; m++) {
+      if (teamIds[m] !== teamIds[5 - m]) round.push({ home: teamIds[m], away: teamIds[5 - m] })
+    }
+    schedule.push(round)
+    const last = teamIds.pop()
+    teamIds.splice(1, 0, last)
+  }
+}
 
 const isLeagueFinished = computed(() => currentRound.value > MAX_ROUNDS)
 
@@ -56,77 +105,72 @@ const champion = computed(() => {
   return leagueStandings.value[0]
 })
 
-// 固定的 3 轮循环对决表
-const schedule = [
-  [{ home: 'team_mine', away: 'team_jp' }, { home: 'team_eu', away: 'team_na' }],
-  [{ home: 'team_mine', away: 'team_eu' }, { home: 'team_na', away: 'team_jp' }],
-  [{ home: 'team_mine', away: 'team_na' }, { home: 'team_jp', away: 'team_eu' }]
-]
-
 // 俱乐部可用球员池 (供布阵使用)
 const playerPool = computed(() => myTeamPlayers.value)
 
 // AI 的队伍 (客队)
 const enemyTeam = ref(null)
 
-// 选秀界面: 剩余可招募名额
-const maxRecruit = 1
-
+// 选秀界面：玩家从自由市场招募
 const draftPlayer = (p) => {
-  if (myTeamPlayers.value.length < maxRecruit && !myTeamPlayers.value.includes(p)) {
-    myTeamPlayers.value.push(p)
+  if (myTeamPlayers.value.length >= MAX_TEAM_SIZE) {
+    alert(`球队已满 ${MAX_TEAM_SIZE} 人！`);
+    return;
   }
+  if (myTeamPlayers.value.includes(p)) return;
+  if (myTeamGold.value < p.stats.price) {
+    alert(`资金不足！需要 ${p.stats.price} 金币`);
+    return;
+  }
+  myTeamGold.value -= p.stats.price;
+  myTeamPlayers.value.push(p);
+  freeAgentsForDraft.value = freeAgentsForDraft.value.filter(fa => fa !== p);
 }
 const removeDrafted = (p) => {
-  myTeamPlayers.value = myTeamPlayers.value.filter(mp => mp !== p)
+  myTeamGold.value += p.stats.price;
+  myTeamPlayers.value = myTeamPlayers.value.filter(mp => mp !== p);
+  freeAgentsForDraft.value.push(p);
 }
+
+const freeAgentsForDraft = ref([...freeAgentsPool])
+
 const finishDrafting = () => {
-  if (myTeamPlayers.value.length === maxRecruit) {
-    // 剩下的自由球员
-    let remainingAgents = freeAgentsPool.filter(p => !myTeamPlayers.value.includes(p));
+  // 玩家先选完了，剩下的自由球员供人机队伍选择
+  let remainingAgents = [...freeAgentsForDraft.value];
 
-    // 给人机队伍补充队员（用他们自己的资金买人，注重能力）
-    leagueTeams.value.forEach(team => {
-      if (team.id !== 'team_mine') {
-        const targetRosterSize = 5;
-        while (team.players.length < targetRosterSize && remainingAgents.length > 0) {
-          // 只看买得起的球员
-          let affordable = remainingAgents.filter(p => p.stats.price <= team.gold);
-          if (affordable.length === 0) break; // 没钱了，停手
-
-          // 为这些球员打分：能力分 + 随机波动（为了不要100%都选同一个最好的人）
-          affordable.forEach(p => {
-             const abilityScore = p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + p.stats.stamina * 1.5;
-             // 加一点随机因素
-             p._aiScore = abilityScore * (0.8 + Math.random() * 0.4); 
-          });
-
-          // 按打分从高到低排序，拿走最好的
-          affordable.sort((a, b) => b._aiScore - a._aiScore);
-          const drafted = affordable[0];
-          
-          // 扣钱加人
-          team.gold -= drafted.stats.price;
-          team.players.push(drafted);
-
-          // 从剩下的池子里移除
-          remainingAgents = remainingAgents.filter(pa => pa !== drafted);
-        }
+  // 给人机队伍补充队员（用他们自己的资金买人，注重能力）
+  leagueTeams.value.forEach(team => {
+    if (team.id !== 'team_mine') {
+      const targetRosterSize = 5;
+      while (team.players.length < targetRosterSize && remainingAgents.length > 0) {
+        let affordable = remainingAgents.filter(p => p.stats.price <= team.gold);
+        if (affordable.length === 0) break;
+        affordable.forEach(p => {
+           const abilityScore = p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + p.stats.stamina * 1.5;
+           p._aiScore = abilityScore * (0.8 + Math.random() * 0.4); 
+        });
+        affordable.sort((a, b) => b._aiScore - a._aiScore);
+        const drafted = affordable[0];
+        team.gold -= drafted.stats.price;
+        team.players.push(drafted);
+        remainingAgents = remainingAgents.filter(pa => pa !== drafted);
       }
-    });
+    }
+  });
 
-    // 经过人机挑剩下的人，正式流入我们的转会市场
-    scoutPoolPlayers.value = remainingAgents;
-    
-    appState.value = 'league'
-    saveGame()
-  }
+  scoutPoolPlayers.value = remainingAgents;
+  appState.value = 'league'
+  saveGame()
 }
 
 const getNextOpponentId = () => {
-  const roundIdx = (currentRound.value - 1) % 3
-  const match = schedule[roundIdx].find(m => m.home === 'team_mine' || m.away === 'team_mine')
-  return match.home === 'team_mine' ? match.away : match.home
+  const roundIdx = (currentRound.value - 1) % schedule.length
+  const thisRound = schedule[roundIdx]
+  if (!thisRound || !Array.isArray(thisRound)) return 'team_jp'
+  // 找到包含玩家队的那场比赛
+  const myMatch = thisRound.find(m => m.home === 'team_mine' || m.away === 'team_mine')
+  if (!myMatch) return 'team_jp'
+  return myMatch.home === 'team_mine' ? myMatch.away : myMatch.home
 }
 
 const getNextOpponent = () => {
@@ -167,10 +211,14 @@ const buyPlayer = (p, isFromOtherTeam = false) => {
     alert(`球队已满 ${MAX_TEAM_SIZE} 人，请先卖出现有球员！`)
     return
   }
+  // 核心球员不可被挖走
+  if (isFromOtherTeam && p.isCore) {
+    alert(`${p.name} 是球队核心，拒绝转会！`)
+    return
+  }
   const cost = isFromOtherTeam ? Math.floor(p.stats.price * 1.5) : p.stats.price;
   if (myTeamGold.value >= cost) {
     myTeamGold.value -= cost
-    // 这里做个深拷贝或者只记录所有权，以免直接修改对象引用
     myTeamPlayers.value.push(p)
     if (!isFromOtherTeam) {
       scoutPoolPlayers.value = scoutPoolPlayers.value.filter(mp => mp !== p)
@@ -179,20 +227,36 @@ const buyPlayer = (p, isFromOtherTeam = false) => {
       leagueTeams.value.forEach(t => {
         if (t.players.includes(p)) {
           t.players = t.players.filter(tp => tp !== p)
-          t.gold = (t.gold || 0) + cost // NPC得到卖球员的转会费
+          t.gold = (t.gold || 0) + cost
           
-          // NPC球队少人后自动从市场补充一个人
-          let affordable = scoutPoolPlayers.value.filter(sp => sp.stats.price <= t.gold);
-          if (affordable.length > 0) {
-             affordable.forEach(sp => {
-                const abilityScore = sp.stats.serve + sp.stats.receive + sp.stats.forehand + sp.stats.backhand + sp.stats.rally + sp.stats.stamina * 1.5;
-                sp._aiScore = abilityScore * (0.8 + Math.random() * 0.4); 
-             });
-             affordable.sort((a, b) => b._aiScore - a._aiScore);
-             const drafted = affordable[0];
-             t.gold -= drafted.stats.price;
-             t.players.push(drafted);
-             scoutPoolPlayers.value = scoutPoolPlayers.value.filter(sp => sp !== drafted);
+          // NPC球队少人后必须从市场补充到至少3人
+          while (t.players.length < 3) {
+            let affordable = scoutPoolPlayers.value.filter(sp => sp.stats.price <= t.gold);
+            if (affordable.length === 0) {
+              // 市场无合适球员，生成一个底薪临时工
+              const tempPlayer = new Player('临时工#' + Math.floor(Math.random()*100), {
+                serve: 60 + Math.floor(Math.random()*10),
+                receive: 60 + Math.floor(Math.random()*10),
+                forehand: 60 + Math.floor(Math.random()*10),
+                backhand: 60 + Math.floor(Math.random()*10),
+                rally: 60 + Math.floor(Math.random()*10),
+                stamina: 80 + Math.floor(Math.random()*15),
+                mentality: 60 + Math.floor(Math.random()*15),
+                price: 50
+              });
+              t.players.push(tempPlayer);
+              t.gold -= 50;
+              break;
+            }
+            affordable.forEach(sp => {
+              const abilityScore = sp.stats.serve + sp.stats.receive + sp.stats.forehand + sp.stats.backhand + sp.stats.rally + sp.stats.stamina * 1.5;
+              sp._aiScore = abilityScore * (0.8 + Math.random() * 0.4);
+            });
+            affordable.sort((a, b) => b._aiScore - a._aiScore);
+            const drafted = affordable[0];
+            t.gold -= drafted.stats.price;
+            t.players.push(drafted);
+            scoutPoolPlayers.value = scoutPoolPlayers.value.filter(sp => sp !== drafted);
           }
         }
       })
@@ -227,12 +291,12 @@ const activeSeriesInfo = ref(null)
 // 战术板相关状态
 const isTacticBoardOpen = ref(false)
 const tacticOptions = [
-  { id: 'normal', label: '常规套路', desc: '数值均衡，稳字当头' },
-  { id: 'aggressive', label: '⚔️ 全线搏杀', desc: '强保正手，暴击加成，体力极速消耗' },
-  { id: 'conservative', label: '🛡️ 稳扎稳打', desc: '防守反击，降低失误率，保留体力' },
-  { id: 'target_backhand', label: '🎯 死盯反手', desc: '压制反手，专打对面软肋' },
-  { id: 'first_three', label: '⚡ 前三板', desc: '强化发球与接发，削弱相持' },
-  { id: 'rally_focus', label: '🏓 形成相持', desc: '大幅依赖相持能力和体能' }
+  { id: 'normal', label: '常规套路', desc: '属性均衡，发挥稳定' },
+  { id: 'aggressive', label: '⚔️ 全线搏杀', desc: '正手权重+38%，爆发力强但失误率高，体能消耗2倍' },
+  { id: 'conservative', label: '🛡️ 稳扎稳打', desc: '接发和相持权重提高，降低失误，体能消耗减半' },
+  { id: 'target_backhand', label: '🎯 死盯反手', desc: '反手权重+44%，专打对手反手弱点' },
+  { id: 'first_three', label: '⚡ 前三板', desc: '发接发权重强化+8%，但相持能力大幅削弱' },
+  { id: 'rally_focus', label: '🏓 形成相持', desc: '相持权重+44%，体能消耗低，但发接发偏弱' }
 ]
 const selectedTactic = ref('normal')
 
@@ -389,31 +453,47 @@ const resetToMenu = () => {
      myTeamGold.value += 200 // 出场费
   }
   
-  // 2. 模拟后台其他 AI 交手的比赛
-  const roundIdx = (currentRound.value - 1) % 3
-  const bgMatch = schedule[roundIdx].find(m => m.home !== 'team_mine' && m.away !== 'team_mine')
-  if (bgMatch) {
-     const bgHomeId = bgMatch.home
-     const bgAwayId = bgMatch.away
-     
-     // 随机胜负
-     if (Math.random() > 0.5) {
-         teamStats.value[bgHomeId].wins++
-         teamStats.value[bgHomeId].points += 3
-         teamStats.value[bgAwayId].losses++
-         const homeTeam = leagueTeams.value.find(t => t.id === bgHomeId);
-         const awayTeam = leagueTeams.value.find(t => t.id === bgAwayId);
-         if (homeTeam) homeTeam.gold = (homeTeam.gold || 0) + 500;
-         if (awayTeam) awayTeam.gold = (awayTeam.gold || 0) + 200;
-     } else {
-         teamStats.value[bgAwayId].wins++
-         teamStats.value[bgAwayId].points += 3
-         teamStats.value[bgHomeId].losses++
-         const homeTeam = leagueTeams.value.find(t => t.id === bgHomeId);
-         const awayTeam = leagueTeams.value.find(t => t.id === bgAwayId);
-         if (awayTeam) awayTeam.gold = (awayTeam.gold || 0) + 500;
-         if (homeTeam) homeTeam.gold = (homeTeam.gold || 0) + 200;
-     }
+  // 2. 模拟后台所有 AI 交手的比赛（含真实体能消耗）
+  const roundIdx = (currentRound.value - 1) % schedule.length
+  const thisRound = schedule[roundIdx]
+  if (thisRound) {
+     thisRound.forEach(match => {
+       if (match.home !== 'team_mine' && match.away !== 'team_mine') {
+         const h = leagueTeams.value.find(t => t.id === match.home);
+         const a = leagueTeams.value.find(t => t.id === match.away);
+         if (h && a && h.players.length >= 3 && a.players.length >= 3) {
+           // 按综合能力+当前体力排序，选出各队最强的3人
+           const sortFn = (p) => p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2;
+           const homeRoster = [...h.players].sort((x, y) => sortFn(y) - sortFn(x)).slice(0, 3);
+           const awayRoster = [...a.players].sort((x, y) => sortFn(y) - sortFn(x)).slice(0, 3);
+           // 执行完整的团体赛模拟（含体能消耗）
+           const tm = new TeamMatch(homeRoster, awayRoster);
+           tm.log = () => {}; // 静默模拟
+           while (!tm.isFinished) {
+             tm.startNextFixture();
+             const fixture = tm.fixtures[tm.currentFixtureIndex];
+             if (fixture && fixture.match) {
+               fixture.match.playSeriesAuto();
+             }
+             tm.recordFixtureResult();
+           }
+           const homeWin = tm.scoreHome >= 3;
+           if (homeWin) {
+             teamStats.value[match.home].wins++;
+             teamStats.value[match.home].points += 3;
+             teamStats.value[match.away].losses++;
+             if (h) h.gold = (h.gold || 0) + 500;
+             if (a) a.gold = (a.gold || 0) + 200;
+           } else {
+             teamStats.value[match.away].wins++;
+             teamStats.value[match.away].points += 3;
+             teamStats.value[match.home].losses++;
+             if (a) a.gold = (a.gold || 0) + 500;
+             if (h) h.gold = (h.gold || 0) + 200;
+           }
+         }
+       }
+     });
   }
 
   // 3. 轮间体力恢复（固定恢复10点，不会回满）
@@ -421,7 +501,7 @@ const resetToMenu = () => {
   leagueTeams.value.forEach(t => {
     if (t.id !== 'team_mine') {
       t.players.forEach(p => p.roundRecovery());
-      // AI赚点小钱并可能从自由市场买人
+      // AI赚点小钱
       t.gold = (t.gold || 1000) + 100;
       // AI有30%概率从自由市场买人补充（如果还有名额）
       if (t.players.length < 5 && scoutPoolPlayers.value.length > 0 && Math.random() < 0.3) {
@@ -432,6 +512,19 @@ const resetToMenu = () => {
           t.gold -= pick.stats.price;
           t.players.push(pick);
           scoutPoolPlayers.value = scoutPoolPlayers.value.filter(sp => sp !== pick);
+        }
+      }
+      // AI自动训练：用剩余资金训练核心球员
+      if (t.gold > 200) {
+        const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
+        if (trainable.length > 0) {
+          const target = trainable.sort((a, b) => b.stats.price - a.stats.price)[0];
+          const stats = ['serve','receive','forehand','backhand','rally'];
+          const trainStat = stats.sort(() => Math.random() - 0.5)[0];
+          const cost = target.getTrainCost(trainStat);
+          if (cost <= t.gold) {
+            t.gold -= target.trainStat(trainStat);
+          }
         }
       }
     }
@@ -458,13 +551,15 @@ const resetToMenu = () => {
 /** 重置整个联赛（重新开始） */
 const resetGame = () => {
   myTeamPlayers.value = []
-  myTeamGold.value = 1500
+  myTeamGold.value = 1000
   currentRound.value = 1
   teamStats.value = {
     'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
     'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
     'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0 },
-    'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 }
+    'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 },
+    'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
+    'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
   }
   // 重置AI队伍
   leagueTeams.value = leagueAICaching.map(t => ({
@@ -475,7 +570,9 @@ const resetGame = () => {
     players: t.players.map(p => new Player(p.name, { ...p.stats }))
   }))
   scoutPoolPlayers.value = []
-  appState.value = 'drafting'
+  freeAgentsForDraft.value = [...freeAgentsPool]
+  selectedGroup.value = null
+  appState.value = 'group_select'
 }
 </script>
 
@@ -483,33 +580,62 @@ const resetGame = () => {
   <div class="container">
     <h1>乒乓球经理 - 模拟经营</h1>
 
-    <!-- ================= 选秀建队阶段 ================= -->
+    <!-- ================= 三大分组选择 ================= -->
+    <div v-if="appState === 'group_select'" class="drafting-view">
+      <h3>【选择你的建队基石】</h3>
+      <p class="desc">请从下面三组中挑选一组作为你的初始阵容，其余两组将成为联赛对手</p>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;">
+        <div v-for="g in starterGroups" :key="g.id" class="player-card selectable"
+             :class="{'selected': selectedGroup === g.id}"
+             @click="selectGroup(g.id)" style="width:260px;cursor:pointer;">
+          <h4 style="color:#e74c3c;font-size:20px;">{{ g.name }}</h4>
+          <div v-for="p in g.players" :key="p.name" style="margin:8px 0;padding:8px;background:#f9f9f9;border-radius:6px;">
+            <strong>{{ p.name }}</strong> ({{ p.stats.price }}金)
+            <div style="font-size:12px;color:#666;">
+              发{{ p.stats.serve }} 接{{ p.stats.receive }} 正{{ p.stats.forehand }} 反{{ p.stats.backhand }} 相{{ p.stats.rally }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 选秀阶段：玩家先选人 ================= -->
     <div v-if="appState === 'drafting'" class="drafting-view">
-      <h3>【建队基石】从自由市场免费招募</h3>
-      <p class="desc">请从下方自由球员中免费招募 1 名选手作为你的建队核心！（当前：{{ myTeamPlayers.length }}/1  &nbsp;|&nbsp;  <span class="hint">点击已选球员可取消选择</span>）</p>
+      <h3>【选秀签约 - 请你先选人】</h3>
+      <p class="desc">你的初始阵容已就绪，当前资金 <strong>{{ myTeamGold }}</strong> 金币</p>
+      <p class="desc" style="font-size:14px;">点击下方自由球员签约补强（上限 {{ MAX_TEAM_SIZE }} 人），确认后AI球队再挑选剩余球员</p>
       
-      <div class="draft-pool">
-        <div class="player-card selectable" 
-             v-for="p in freeAgentsPool" 
-             :key="p.name"
-             :class="{'selected': myTeamPlayers.includes(p)}"
-             @click="myTeamPlayers.includes(p) ? removeDrafted(p) : draftPlayer(p)">
+      <div style="display:flex;flex-wrap:wrap;gap:15px;justify-content:center;margin:15px 0;">
+        <div class="player-card" v-for="p in freeAgentsForDraft" :key="p.name" style="border:2px solid #f39c12;cursor:pointer;" @click="draftPlayer(p)">
           <h4>{{ p.name }}</h4>
           <ul class="stats">
             <li>发球: {{ p.stats.serve }} | 接发: {{ p.stats.receive }}</li>
             <li>正手: {{ p.stats.forehand }} | 反手: {{ p.stats.backhand }}</li>
             <li>相持: {{ p.stats.rally }} | 体能: {{ p.stats.stamina }} | 心态: {{ p.stats.mentality }}</li>
-            <li v-if="p.skills?.length">✨ 技能: {{ p.skills.map(s => SKILLS[s]?.name).join('、') }}</li>
           </ul>
+          <div style="font-size:16px;font-weight:bold;color:#e67e22;margin-top:8px;">💰 {{ p.stats.price }}</div>
         </div>
       </div>
-      
+
+      <div style="margin:15px 0;">
+        <h4>我的球队 ({{ myTeamPlayers.length }}/{{ MAX_TEAM_SIZE }})</h4>
+        <div class="draft-pool">
+          <div class="player-card" v-for="p in myTeamPlayers" :key="p.name" style="border:2px solid #2ecc71;">
+            <h4>{{ p.name }}</h4>
+            <ul class="stats" style="font-size:13px;">
+              <li>发{{ p.stats.serve }} 接{{ p.stats.receive }} 正{{ p.stats.forehand }} 反{{ p.stats.backhand }} 相{{ p.stats.rally }}</li>
+            </ul>
+            <button class="btn-danger mt" @click="removeDrafted(p)" style="width:100%;">退款取消 (💰+{{ p.stats.price }})</button>
+          </div>
+        </div>
+      </div>
+
       <div class="action-bar mt">
-        <button class="btn-primary huge" :disabled="myTeamPlayers.length !== 1" @click="finishDrafting">
-          确认核心球员，进入转会市场！
-        </button>
+        <button class="btn-primary huge" @click="finishDrafting">确认，进入联赛！</button>
       </div>
     </div>
+
+    <!-- ================= 联赛信息面板 ================= -->
 
     <!-- ================= 冠军庆典 ================= -->
     <div v-if="appState === 'champion'" class="champion-view">
@@ -597,6 +723,26 @@ const resetGame = () => {
               {{ myTeamPlayers.length < 3 ? '球队不足 3 人，请前往球探中心买人！' : '前往球场迎战！' }}
             </button>
           </div>
+
+          <!-- 🏋️ 训练营 -->
+          <div style="border-top: 2px dashed #ecf0f1; padding-top: 15px; margin-top: 15px;">
+            <h3 style="margin:0 0 10px 0;">🏋️ 训练营
+              <button class="btn-secondary" style="float:right;padding:3px 10px;font-size:13px;" @click="showTraining = !showTraining">{{ showTraining ? '收起' : '展开' }}</button>
+            </h3>
+            <div v-if="showTraining">
+              <p class="desc" style="font-size:14px;margin:5px 0;">花费金币训练球员属性，越接近潜力上限费用越高</p>
+              <div v-for="p in myTeamPlayers" :key="'train-'+p.name" style="background:#f9f9f9;border-radius:8px;padding:10px;margin:8px 0;border:1px solid #2ecc71;">
+                <strong>{{ p.name }}</strong> <span style="font-size:12px;color:#888;">(潜力上限)</span>
+                <ul class="stats" style="margin:5px 0 0 0;">
+                  <li v-for="s in ['serve','receive','forehand','backhand','rally']" :key="s" style="display:inline-block;margin-right:10px;">
+                    {{ {serve:'发球',receive:'接发',forehand:'正手',backhand:'反手',rally:'相持'}[s] }}: {{ p.stats[s] }}/{{ p._maxStats[s]||'∞' }}
+                    <button v-if="p.stats[s] < (p._maxStats[s]||999)" class="train-btn" @click="trainPlayer(p, s)" :title="'训练费用: '+p.getTrainCost(s)+'金'">↑{{ p.getTrainCost(s) }}金</button>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
     </div>
@@ -690,6 +836,10 @@ const resetGame = () => {
              :class="{'selected': rosterSlots.includes(p)}"
              @click="selectPlayer(p)">
           <strong>{{ p.name }}</strong>
+          <div style="font-size:12px;color:#888;margin-top:3px;">
+            ⚡体力 {{ Math.floor(p.currentStamina) }}/{{ p.stats.stamina }}
+            <span class="sta-bar"><span class="sta-fill" :style="{width: (p.currentStamina/p.stats.stamina*100)+'%'}"></span></span>
+          </div>
           <div class="stats">正手: {{ p.stats.forehand }} | 反手: {{ p.stats.backhand }} <br> 心态: {{ p.stats.mentality }}</div>
         </div>
       </div>
@@ -828,21 +978,21 @@ const resetGame = () => {
         </table>
         <hr style="margin: 20px 0;">
         <h3>📊 体能消耗系数x</h3>
-        <p style="font-size:13px;color:#888;text-align:left;">每盘消耗 = 10 × 战术倍率 × x。x越低越省体力。</p>
+        <p style="font-size:13px;color:#888;text-align:left;">每盘消耗 = 20 × 战术倍率 × x。x越低越省体力。</p>
         <table class="skill-table">
           <thead><tr><th>价格档</th><th>x系数</th><th>举例</th><th>常规消耗</th><th>搏杀消耗</th></tr></thead>
           <tbody>
-            <tr><td>1000</td><td><strong>0.75</strong></td><td>樊振东/张继科/马龙</td><td>8</td><td>11</td></tr>
-            <tr><td>900</td><td><strong>0.80</strong></td><td>瓦尔德内尔/王皓</td><td>8</td><td>12</td></tr>
-            <tr><td>800</td><td><strong>0.85</strong></td><td>张本/林昀儒/波尔等</td><td>9</td><td>13</td></tr>
-            <tr><td>700</td><td><strong>0.90</strong></td><td>奥恰/王励勤/刘国梁</td><td>9</td><td>14</td></tr>
-            <tr><td>600</td><td><strong>0.95</strong></td><td>雨果/许昕/林高远等</td><td>10</td><td>14</td></tr>
-            <tr><td>500</td><td><strong>1.00</strong></td><td>弗朗西斯卡/方博</td><td>10</td><td>15</td></tr>
-            <tr><td>400</td><td><strong>1.05</strong></td><td>阿鲁纳</td><td>11</td><td>16</td></tr>
-            <tr><td>200~100</td><td><strong>1.10</strong></td><td>哈基阔/哈基羊</td><td>11</td><td>17</td></tr>
+            <tr><td>1000</td><td><strong>0.75</strong></td><td>樊振东/张继科/马龙</td><td>15</td><td>23</td></tr>
+            <tr><td>900</td><td><strong>0.80</strong></td><td>瓦尔德内尔/王皓</td><td>16</td><td>24</td></tr>
+            <tr><td>800</td><td><strong>0.85</strong></td><td>张本/林昀儒/波尔等</td><td>17</td><td>26</td></tr>
+            <tr><td>700</td><td><strong>0.90</strong></td><td>奥恰/王励勤/刘国梁</td><td>18</td><td>27</td></tr>
+            <tr><td>600</td><td><strong>0.95</strong></td><td>雨果/许昕/林高远等</td><td>19</td><td>29</td></tr>
+            <tr><td>500</td><td><strong>1.00</strong></td><td>弗朗西斯卡/方博</td><td>20</td><td>30</td></tr>
+            <tr><td>400</td><td><strong>1.05</strong></td><td>阿鲁纳</td><td>21</td><td>32</td></tr>
+            <tr><td>200~100</td><td><strong>1.10</strong></td><td>哈基阔/哈基羊</td><td>22</td><td>33</td></tr>
           </tbody>
         </table>
-        <p style="font-size:12px;color:#999;text-align:left;margin-top:8px;">战术倍率：搏杀/相持1.5、前三板1.3、稳扎稳打0.8、常规/死盯反手1.0</p>
+        <p style="font-size:12px;color:#999;text-align:left;margin-top:8px;">战术倍率：搏杀/相持1.5、前三板1.3、稳扎稳打0.8、常规/死盯反手1.0。每板额外消耗微量体力。</p>
         <button class="btn-secondary mt" @click="showSkillBook = false" style="margin-top:15px">关闭</button>
       </div>
     </div>
@@ -963,6 +1113,8 @@ button.huge { padding: 15px 40px; font-size: 18px; }
 .sta-num { font-size: 11px; color: #888; font-weight: normal; }
 .btn-link { background: none; border: none; color: #3498db; cursor: pointer; font-size: 14px; text-decoration: underline; padding: 0; margin-left: 10px; }
 .btn-link:hover { color: #2980b9; }
+.train-btn { background: #27ae60; color: white; border: none; border-radius: 4px; padding: 2px 8px; font-size: 11px; cursor: pointer; float: right; }
+.train-btn:hover { background: #219a52; }
 .skill-table { width: 100%; border-collapse: collapse; font-size: 14px; text-align: left; }
 .skill-table th, .skill-table td { padding: 8px 12px; border-bottom: 1px solid #eee; }
 .skill-table th { background: #f4f6f7; color: #34495e; }

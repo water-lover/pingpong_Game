@@ -27,12 +27,49 @@ export class Player {
                             price >= 500 ? 1.00 :
                                 price >= 400 ? 1.05 : 1.10;
 
+        // 潜力上限 —— 越强越贵潜力越高
+        const maxCap = price >= 1000 ? 105 :
+            price >= 900 ? 102 :
+                price >= 800 ? 99 :
+                    price >= 700 ? 97 :
+                        price >= 600 ? 94 :
+                            price >= 500 ? 92 :
+                                price >= 400 ? 90 : 88;
+        this._maxStats = {};
+        for (const key of ['serve', 'receive', 'forehand', 'backhand', 'rally', 'mentality']) {
+            // 潜力不低于当前值，不高于上限
+            this._maxStats[key] = Math.max(this.stats[key], Math.min(maxCap, this.stats[key] + (price >= 1000 ? 8 : price >= 800 ? 6 : 4)));
+        }
+        // 体能不做训练限制
+        this._maxStats.stamina = this.stats.stamina;
+
         this.form = 1.0;
         this.consecutiveWins = 0;
         this.tacticChangedThisMatch = false;
-        // 统计本盘使用过的战术
         this.usedTacticsInFixture = [];
         this.resetMatchStates();
+    }
+
+    /** 获取训练某项属性所需费用 */
+    getTrainCost(statName) {
+        const cur = this.stats[statName];
+        const max = this._maxStats[statName];
+        if (cur >= max || !max) return Infinity;
+        return Math.round(100 + (cur - 70) * 15);
+    }
+
+    /** 训练单项属性，返回是否成功 */
+    trainStat(statName) {
+        const cost = this.getTrainCost(statName);
+        if (cost === Infinity) return 0;
+        const gain = 1 + (Math.random() < 0.3 ? 1 : 0); // 70%概率+1, 30%概率+2
+        const max = this._maxStats[statName];
+        const actualGain = Math.min(gain, max - this.stats[statName]);
+        if (actualGain <= 0) return 0;
+        this.stats[statName] += actualGain;
+        // 同步更新_baseStats让技能叠加基于训练后数值
+        this._baseStats[statName] = this.stats[statName];
+        return cost;
     }
 
     resetMatchStates() {
@@ -60,7 +97,7 @@ export class Player {
         else if (tactics.includes('first_three')) multiplier = 1.3;
         else if (tactics.includes('conservative')) multiplier = 0.8;
 
-        return Math.round(10 * multiplier * this.x);
+        return Math.round(20 * multiplier * this.x);
     }
 
     /** 应用一盘比赛的体力消耗 */
@@ -96,27 +133,27 @@ export class Player {
 const TACTICS = {
     normal: {
         label: '常规套路', weights: { serve: 0.18, receive: 0.18, forehand: 0.22, backhand: 0.22, rally: 0.20 },
-        staCost: 0.9, rngRange: 14, rngShift: -7, serveBonus: 0, rallyBonus: 0, desc: '数值均衡，稳字当头'
+        staCost: 0.9, rngRange: 12, rngShift: -6, serveBonus: 0, rallyBonus: 0, desc: '数值均衡，稳字当头'
     },
     aggressive: {
         label: '全线搏杀', weights: { serve: 0.10, receive: 0.10, forehand: 0.38, backhand: 0.22, rally: 0.20 },
-        staCost: 2.0, rngRange: 34, rngShift: -17, serveBonus: 5, rallyBonus: 8, desc: '高风险高回报·易失误'
+        staCost: 2.0, rngRange: 20, rngShift: -10, serveBonus: 5, rallyBonus: 8, desc: '高风险高回报·易失误'
     },
     conservative: {
         label: '稳扎稳打', weights: { serve: 0.18, receive: 0.22, forehand: 0.15, backhand: 0.20, rally: 0.25 },
-        staCost: 0.5, rngRange: 10, rngShift: -5, serveBonus: -2, rallyBonus: -3, desc: '防守反击，降低失误率'
+        staCost: 0.5, rngRange: 8, rngShift: -4, serveBonus: 0, rallyBonus: 0, desc: '防守反击，降低失误率'
     },
     target_backhand: {
         label: '死盯反手', weights: { serve: 0.12, receive: 0.12, forehand: 0.12, backhand: 0.44, rally: 0.20 },
-        staCost: 0.9, rngRange: 14, rngShift: -7, serveBonus: 0, rallyBonus: 4, desc: '压制反手，专打软肋'
+        staCost: 0.9, rngRange: 12, rngShift: -6, serveBonus: 0, rallyBonus: 4, desc: '压制反手，专打软肋'
     },
     first_three: {
         label: '前三板', weights: { serve: 0.28, receive: 0.24, forehand: 0.18, backhand: 0.15, rally: 0.15 },
-        staCost: 1.2, rngRange: 18, rngShift: -9, serveBonus: 8, rallyBonus: -10, desc: '强化发接发，削弱相持'
+        staCost: 1.2, rngRange: 14, rngShift: -7, serveBonus: 8, rallyBonus: -5, desc: '强化发接发，削弱相持'
     },
     rally_focus: {
         label: '形成相持', weights: { serve: 0.08, receive: 0.08, forehand: 0.20, backhand: 0.20, rally: 0.44 },
-        staCost: 0.6, rngRange: 12, rngShift: -6, serveBonus: -3, rallyBonus: 8, desc: '大幅依赖相持与体能'
+        staCost: 0.6, rngRange: 10, rngShift: -5, serveBonus: -3, rallyBonus: 8, desc: '大幅依赖相持与体能'
     }
 };
 
@@ -181,7 +218,7 @@ function getRNG(tid) {
 }
 
 function getStaminaCost(player, mult) {
-    let c = TACTICS[player.currentTactic].staCost * mult * 0.02;
+    let c = TACTICS[player.currentTactic].staCost * mult * 0.04;
     if (player.skills.includes('大力神')) c = SKILLS['大力神'].onStaminaCost(c);
     if (player.skills.includes('常青树')) c = SKILLS['常青树'].onStaminaCost(c);
     return c;
@@ -214,13 +251,14 @@ export class GameMatch {
         const server = this.turn === 'A' ? this.playerA : this.playerB;
         const receiver = this.turn === 'A' ? this.playerB : this.playerA;
         const diff = Math.abs(this.scoreA - this.scoreB);
-        const isComeback = diff >= 3; // 分差≥3就触发追分，防止一路崩
+        const isComeback = diff >= 3;
         const isClutch = (this.scoreA >= 9 && this.scoreB >= 9) || this.scoreA >= 10 || this.scoreB >= 10;
         const trailingA = this.scoreA < this.scoreB;
 
         const mkRole = (side, phase) =>
             (isClutch ? 'clutch_' : '') + (isComeback && ((side === 'A' && trailingA) || (side === 'B' && !trailingA)) ? 'comeback_' : '') + phase;
 
+        // ── 发球/接发阶段 ──
         let servePower = calcTacticStrength(server, mkRole('A', 'server'), false, receiver);
         let receivePower = calcTacticStrength(receiver, mkRole('B', 'receiver'), false, server);
         if (isComeback) {
@@ -230,15 +268,15 @@ export class GameMatch {
 
         const adv = (servePower + getRNG(server.currentTactic)) - (receivePower + getRNG(receiver.currentTactic));
 
-        // 发球直接得分/接发直接得分
-        if (adv > 30) {
+        // 发球/接发直接得分（阈值降低）
+        if (adv > 20) {
             this.scorePoint(this.turn === 'A' ? 'A' : 'B');
             server.currentStamina = Math.max(0, server.currentStamina - 0.3);
             receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.2);
             this.log(`⚡ [发球得分] ${server.name} 发球直接得分！`);
             this._afterPoint(server === this.playerA); this._finishPoint(); return;
         }
-        if (adv < -35) {
+        if (adv < -22) {
             this.scorePoint(this.turn === 'A' ? 'B' : 'A');
             receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.3);
             server.currentStamina = Math.max(0, server.currentStamina - 0.2);
@@ -246,9 +284,10 @@ export class GameMatch {
             this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
         }
 
+        // ── 相持阶段（渐进概率化得分）──
         let rc = 0, atk = adv > 3 ? server : receiver, def = adv > 3 ? receiver : server, pw = null;
         let la = 0, ld = 0;
-        while (rc < 30) {
+        while (rc < 25) {
             rc++;
             const aRole = mkRole(atk === this.playerA ? 'A' : 'B', 'attacker');
             const dRole = mkRole(def === this.playerA ? 'A' : 'B', 'defender');
@@ -264,23 +303,51 @@ export class GameMatch {
             const bonus = atk.currentTactic === 'aggressive' ? 4 : (atk.currentTactic === 'first_three' && rc <= 2 ? 3 : 0);
             la = ap + bonus + getRNG(atk.currentTactic);
             ld = dp * 0.95 + getRNG(def.currentTactic);
+
             atk.currentStamina = Math.max(0, atk.currentStamina - getStaminaCost(atk, 0.5));
             def.currentStamina = Math.max(0, def.currentStamina - getStaminaCost(def, 0.4));
-            if (la - ld > 20) { pw = atk; break; }
-            if (la - ld < -22) { pw = def; break; }
+
+            // 渐进因子：前几板不容易得分（让相持能打起来）
+            const shotFactor = Math.min(1.0, (rc + 3) / 12);
+            // rc=1→0.33, rc=3→0.50, rc=5→0.67, rc=9→1.0
+
+            // 概率化得分：差值越大得分概率越高
+            const diffScore = la - ld;
+            // 基础概率 = 50% + 差值/35，再乘以渐进因子
+            const basePct = 0.50 + diffScore / 35;
+            const atkWinPct = Math.max(0.04, Math.min(0.94, basePct * shotFactor + 0.50 * (1 - shotFactor)));
+            // 前几板概率被压低向50%靠拢，保证能打上几板
+
+            if (Math.random() < atkWinPct) {
+                pw = atk;
+                if (rc >= 8) this.log(`🔥 [多板相持·${rc}板] ${atk.name} 拿下！`);
+                else if (rc >= 4) this.log(`[相持·${rc}板] ${atk.name} 得分`);
+                else this.log(`[短球·${rc}板] ${atk.name} 得分`);
+                break;
+            }
+
+            // 防守方小概率反击（随板数增加）
+            if (Math.random() < 0.04 * shotFactor) {
+                pw = def;
+                if (rc >= 8) this.log(`🔄 [反击·${rc}板] ${def.name} 防守反击得分！`);
+                else this.log(`[反击·${rc}板] ${def.name} 反击得分！`);
+                break;
+            }
+
+            // 长台相持 >16板后随机结束
+            if (rc > 16 && Math.random() < 0.08) {
+                pw = Math.random() < 0.5 + diffScore / 60 ? atk : def;
+                this.log(`💰 [长台·${rc}板] ${pw.name} 幸运得分！`);
+                break;
+            }
+
             [atk, def] = [def, atk];
-            if (rc > 18 && Math.random() < 0.06) { pw = Math.random() < 0.5 ? atk : def; break; }
         }
         if (!pw) pw = la > ld ? atk : def;
 
         this.rallyLengths.push(rc);
         if (pw === this.playerA) this.scorePoint('A'); else this.scorePoint('B');
         this._afterPoint(pw === this.playerA);
-
-        const wn = pw.name;
-        if (rc >= 10) this.log(`🔥 [多板相持·${rc}板] ${wn} 艰难拿下！`);
-        else if (rc >= 5) this.log(`[相持·${rc}板] ${wn} 得分`);
-        else this.log(`[短球·${rc}板] ${wn} 得分`);
         this._finishPoint();
     }
 

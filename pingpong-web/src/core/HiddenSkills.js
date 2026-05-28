@@ -9,39 +9,42 @@ export const SKILLS = {
     /** 樊振东: 王者之心 — 常驻全属性+5%，关键分额外+8%，决胜局额外+5% */
     王者之心: {
         name: '王者之心',
-        desc: '常驻全属性+5%，关键分再+8%',
+        desc: '常驻全属性+4%，关键分再+6%',
         onBeforeCalc(player) {
-            player.stats.serve += 5;
-            player.stats.receive += 5;
-            player.stats.forehand += 5;
-            player.stats.backhand += 5;
-            player.stats.rally += 5;
+            player.stats.serve += 4;
+            player.stats.receive += 4;
+            player.stats.forehand += 4;
+            player.stats.backhand += 4;
+            player.stats.rally += 4;
         },
-        onClutch(player, baseStrength) { return baseStrength * 1.08; },
-        onDeciding(player, baseStrength) { return baseStrength * 1.05; }
+        onClutch(player, baseStrength) { return baseStrength * 1.06; },
+        onDeciding(player, baseStrength) { return baseStrength * 1.04; }
     },
 
-    /** 马龙: 六边形战士 — 所有属性最低不低于87，心态永不崩溃(心态下限80%) */
+    /** 马龙: 六边形战士 — 全属性保底88，相持阶段+3% */
     六边形战士: {
         name: '六边形战士',
-        desc: '全属性保底87，心态永不崩',
+        desc: '全属性保底90，相持+4',
         onBeforeCalc(player) {
-            // 在属性计算前确保最低值
             const stats = player.stats;
-            stats.serve = Math.max(87, stats.serve);
-            stats.receive = Math.max(87, stats.receive);
-            stats.forehand = Math.max(87, stats.forehand);
-            stats.backhand = Math.max(87, stats.backhand);
-            stats.rally = Math.max(87, stats.rally);
-            player.currentMentality = Math.max(player.stats.mentality * 0.8, player.currentMentality);
-        }
+            stats.serve = Math.max(90, stats.serve);
+            stats.receive = Math.max(90, stats.receive);
+            stats.forehand = Math.max(90, stats.forehand);
+            stats.backhand = Math.max(90, stats.backhand);
+            stats.rally = Math.max(90, stats.rally);
+            player.currentMentality = Math.max(player.stats.mentality * 0.90, player.currentMentality);
+        },
+        onRally(player, baseStrength) { return baseStrength + 4; }
     },
 
-    /** 张继科: 藏獒觉醒 — 大比分落后时(0-2局/局内分差≥5)爆发，全属性+8% */
+    /** 张继科: 藏獒觉醒 — 落后时爆发+10%，反手+2常驻 */
     藏獒觉醒: {
         name: '藏獒觉醒',
-        desc: '落后时爆发全属性+8%',
-        onComeback(player, baseStrength) { return baseStrength * 1.08; }
+        desc: '落后时+10%，反手+2',
+        onComeback(player, baseStrength) { return baseStrength * 1.10; },
+        onBeforeCalc(player) {
+            player.stats.backhand += 2;
+        }
     },
 
     /** 王楚钦: 发球鬼才 — 发球轮全属性+3% */
