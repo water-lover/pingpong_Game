@@ -142,7 +142,7 @@ const getTeamObj = (standingsEntry) => {
   return leagueTeams.value.find(t => t.id === id) || { id: 'team_mine', name: standingsEntry.name, players: [...myTeamPlayers.value] }
 }
 
-const startPlayoffMatch = (isFinal = false) => {
+const startPlayoffMatch = (isFinal = false, semiIndex = -1) => {
   const bracket = playoffBracket.value
   if (isFinal) {
     playoffCurrentMatch.value = {
@@ -153,9 +153,9 @@ const startPlayoffMatch = (isFinal = false) => {
       awayTeam: getTeamObj(bracket.final.away),
     }
   } else {
-    // 找到未完成的半决赛
-    const semiIdx = bracket.semis.findIndex(s => s.winner === null)
-    if (semiIdx === -1) return
+    // 使用传入的半决赛索引，或找第一个未完成的
+    const semiIdx = semiIndex >= 0 ? semiIndex : bracket.semis.findIndex(s => s.winner === null)
+    if (semiIdx === -1 || bracket.semis[semiIdx].winner) return
     const semi = bracket.semis[semiIdx]
     playoffCurrentMatch.value = {
       type: 'semifinal',
@@ -599,12 +599,12 @@ const resetToMenu = () => {
      teamStats.value['team_mine'].wins++
      teamStats.value['team_mine'].points += 3
      teamStats.value[oppId].losses++
-     myTeamGold.value += 1500 // 赢球奖金
+     myTeamGold.value += 2500 // 赢球奖金
   } else {
      teamStats.value['team_mine'].losses++
      teamStats.value[oppId].wins++
      teamStats.value[oppId].points += 3
-     myTeamGold.value += 800 // 出场费
+     myTeamGold.value += 1500 // 出场费
   }
   
   // 2. 模拟后台所有 AI 交手的比赛（含真实体能消耗）
@@ -637,14 +637,14 @@ const resetToMenu = () => {
              teamStats.value[match.home].wins++;
              teamStats.value[match.home].points += 3;
              teamStats.value[match.away].losses++;
-             if (h) h.gold = (h.gold || 0) + 1500;
-             if (a) a.gold = (a.gold || 0) + 800;
+             if (h) h.gold = (h.gold || 0) + 2500;
+             if (a) a.gold = (a.gold || 0) + 1500;
            } else {
              teamStats.value[match.away].wins++;
              teamStats.value[match.away].points += 3;
              teamStats.value[match.home].losses++;
-             if (a) a.gold = (a.gold || 0) + 1500;
-             if (h) h.gold = (h.gold || 0) + 800;
+             if (a) a.gold = (a.gold || 0) + 2500;
+             if (h) h.gold = (h.gold || 0) + 1500;
            }
          }
        }
@@ -848,7 +848,7 @@ const resetGame = () => {
               <span class="name">{{ s.away.name }}</span>
               <span class="score">{{ s.awayScore }}{{ s.winner === s.away ? ' ✓' : '' }}</span>
             </div>
-            <button v-if="!s.winner" class="btn-match" @click="startPlayoffMatch(false)">⚔️ 开赛</button>
+            <button v-if="!s.winner" class="btn-match" @click="startPlayoffMatch(false, i)">⚔️ 开赛</button>
             <div v-else class="match-result">{{ s.winner.name }} 晋级决赛</div>
           </div>
         </div>
