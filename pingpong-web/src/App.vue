@@ -595,6 +595,9 @@ const resetToMenu = () => {
   const isWin = teamScore.value.home >= 3
   const oppId = getNextOpponentId()
 
+  // 每轮基础经费（与人机队伍持平）
+  myTeamGold.value += 800
+
   if (isWin) {
      teamStats.value['team_mine'].wins++
      teamStats.value['team_mine'].points += 3
