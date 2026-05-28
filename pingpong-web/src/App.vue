@@ -73,7 +73,7 @@ const selectGroup = (groupId) => {
     if (!team) {
       team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1500, players: [] }
       leagueTeams.value.push(team)
-      teamStats.value[teamId] = { name: teamNames[i], points: 0, wins: 0, losses: 0 }
+      teamStats.value[teamId] = { name: teamNames[i], points: 0, wins: 0, losses: 0, chemistry: 50 }
     }
     team.players = g.players.map(p => { const np = new Player(p.name, {...p.stats}); np.isCore = true; return np })
   })
@@ -82,13 +82,15 @@ const selectGroup = (groupId) => {
 
 const myTeamGold = ref(1500)
 const teamStats = ref({
-  'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
-  'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
-  'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0 },
-  'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 },
-  'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
-  'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
+  'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+  'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+  'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+  'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+  'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+  'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0, chemistry: 50 },
 })
+
+// 6队循环赛：每队与其他5队交手3次 = 15轮
 
 // 6队循环赛：每队与其他5队交手3次 = 15轮
 const schedule = []
@@ -320,8 +322,10 @@ const goToRoster = () => {
       score: p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + (p.isCore ? 35 : 0) + Math.random() * 25
     }));
     scored.sort((a, b) => b.score - a.score);
+    scored.slice(0, 3).forEach(s => { const teamId = getNextOpponentId(); const stats = teamStats.value[teamId]; s.player.teamChemistry = stats ? stats.chemistry : 50; });
     enemyTeam.value = scored.slice(0, 3).map(s => s.player);
   } else {
+    oppPlayers.forEach(p => { const teamId = getNextOpponentId(); const stats = teamStats.value[teamId]; p.teamChemistry = stats ? stats.chemistry : 50; });
     enemyTeam.value = oppPlayers
   }
   appState.value = 'roster'
@@ -453,6 +457,12 @@ const isRosterReady = computed(() => {
 const confirmRosterAndStart = () => {
   appState.value = 'match'
   logs.value = []
+  
+  // 设置球员化学值
+  const chem = teamStats.value['team_mine']?.chemistry || 50
+  const oppChem = teamStats.value[getNextOpponentId()]?.chemistry || 50
+  rosterSlots.value.forEach(p => { if (p) p.teamChemistry = chem })
+  enemyTeam.value.forEach(p => { if (p) p.teamChemistry = oppChem })
   
   // 创建团体赛对象
   currentTeamMatch = new TeamMatch([...rosterSlots.value], enemyTeam.value)
@@ -603,11 +613,19 @@ const resetToMenu = () => {
      teamStats.value['team_mine'].points += 3
      teamStats.value[oppId].losses++
      myTeamGold.value += 2500 // 赢球奖金
+     // 士气：赢球全队+5，化学+3
+     myTeamPlayers.value.forEach(p => p.adjustMorale(5))
+     teamStats.value['team_mine'].chemistry = Math.min(100, (teamStats.value['team_mine'].chemistry || 50) + 3)
+     teamStats.value[oppId].chemistry = Math.max(0, (teamStats.value[oppId].chemistry || 50) - 2)
   } else {
      teamStats.value['team_mine'].losses++
      teamStats.value[oppId].wins++
      teamStats.value[oppId].points += 3
      myTeamGold.value += 1500 // 出场费
+     // 士气：输球全队-3，化学-2
+     myTeamPlayers.value.forEach(p => p.adjustMorale(-3))
+     teamStats.value['team_mine'].chemistry = Math.max(0, (teamStats.value['team_mine'].chemistry || 50) - 2)
+     teamStats.value[oppId].chemistry = Math.min(100, (teamStats.value[oppId].chemistry || 50) + 2)
   }
   
   // 2. 模拟后台所有 AI 交手的比赛（含真实体能消耗）
@@ -654,11 +672,11 @@ const resetToMenu = () => {
      });
   }
 
-  // 3. 轮间体力恢复（固定恢复10点，不会回满）
-  myTeamPlayers.value.forEach(p => p.roundRecovery())
+  // 3. 轮间体力恢复 + 士气/化学调整
+  myTeamPlayers.value.forEach(p => { p.roundRecovery(); p.roundMoraleRecovery(); })
   leagueTeams.value.forEach(t => {
     if (t.id !== 'team_mine') {
-      t.players.forEach(p => p.roundRecovery());
+      t.players.forEach(p => { p.roundRecovery(); p.roundMoraleRecovery(); });
       // AI赚钱 + 强制训练：每轮至少把核心球员练满
       t.gold = (t.gold || 1000) + 800;
       // AI训练：优先核心球员，有多少钱练多少
@@ -706,12 +724,12 @@ const resetGame = () => {
   myTeamGold.value = 1500
   currentRound.value = 1
   teamStats.value = {
-    'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
-    'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
-    'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0 },
-    'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0 },
-    'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
-    'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
+    'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+    'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+    'team_eu':   { name: '黑马队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+    'team_na':   { name: '新星队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+    'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0, chemistry: 50 },
+    'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0, chemistry: 50 },
   }
   // 重置AI队伍
   leagueTeams.value = leagueAICaching.map(t => ({
@@ -809,14 +827,14 @@ const resetGame = () => {
       <div class="final-standings">
         <h3>最终积分榜</h3>
         <table class="standings-table">
-          <thead><tr><th>排名</th><th>球队</th><th>胜/负</th><th>积分</th></tr></thead>
+          <thead><tr><th>排名</th><th>球队</th><th>胜/负</th><th>积分</th><th>化学</th></tr></thead>
           <tbody>
             <tr v-for="(ts, index) in leagueStandings" :key="ts.name"
                 :class="{'my-team-row': ts.name === '本质队', 'champion-row': index === 0}">
               <td>{{ index + 1 }} {{ index === 0 ? '👑' : '' }}</td>
               <td>{{ ts.name }}</td>
               <td>{{ ts.wins }} - {{ ts.losses }}</td>
-              <td><strong>{{ ts.points }}</strong></td>
+              <td><strong>{{ ts.points }}</strong></td><td><span :style="{color: (ts.chemistry||50) >= 60 ? '#2ecc71' : (ts.chemistry||50) >= 40 ? '#f39c12' : '#e74c3c'}">{{ ts.chemistry || 50 }}</span></td>
             </tr>
           </tbody>
         </table>
@@ -954,9 +972,10 @@ const resetGame = () => {
             <button class="btn-secondary" style="float: right; padding: 5px 10px;" @click="openScout">🔍 球探</button>
           </h3>
           <div class="roster-list">
-            <div class="player-pill" v-for="p in myTeamPlayers" :key="p.name" :title="'当前体力: ' + Math.floor(p.currentStamina) + '/' + p.stats.stamina">
+            <div class="player-pill" v-for="p in myTeamPlayers" :key="p.name" :title="'体力: ' + Math.floor(p.currentStamina) + '/' + p.stats.stamina + ' | 士气: ' + Math.floor(p.morale)">
                {{ p.name }} <span class="sta-bar"><span class="sta-fill" :style="{width: (p.currentStamina/p.stats.stamina*100)+'%'}"></span></span>
                <span class="sta-num">{{ Math.floor(p.currentStamina) }}/{{ p.stats.stamina }}</span>
+               <span :style="{fontSize:'11px',color: p.morale >= 75 ? '#2ecc71' : p.morale >= 50 ? '#f39c12' : '#e74c3c',marginLeft:'4px'}">{{ ['😡','😞','😐','🙂','😄'][Math.floor(p.morale/25)] }}</span>
             </div>
             <div style="font-size: 13px; color: #888; margin-top: 8px;">
               队伍人数: {{ myTeamPlayers.length }} / {{ MAX_TEAM_SIZE }}

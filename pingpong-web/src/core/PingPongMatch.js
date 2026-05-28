@@ -43,6 +43,8 @@ export class Player {
         // 体能不做训练限制
         this._maxStats.stamina = this.stats.stamina;
 
+        // 士气系统（0-100，默认75）
+        this.morale = 75;
         this.form = 1.0;
         this.consecutiveWins = 0;
         this.tacticChangedThisMatch = false;
@@ -112,6 +114,17 @@ export class Player {
     /** 轮间体力恢复 —— 固定恢复10点 */
     roundRecovery() {
         this.currentStamina = Math.min(this.stats.stamina, this.currentStamina + 10);
+    }
+
+    /** 调整士气（上限100，下限0） */
+    adjustMorale(delta) {
+        this.morale = Math.max(0, Math.min(100, this.morale + delta));
+    }
+
+    /** 轮间士气自然恢复 —— 向75靠拢 */
+    roundMoraleRecovery() {
+        if (this.morale < 75) this.morale = Math.min(75, this.morale + 3);
+        else if (this.morale > 75) this.morale = Math.max(75, this.morale - 2);
     }
 
     rerollForm() {
@@ -230,6 +243,12 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
 
     base *= player.form;
     base *= Math.max(0.75, player.currentStamina / Math.max(1, player.stats.stamina));
+    // 士气影响：士气75=100%，每±1点±0.2%战斗力
+    base *= (0.85 + 0.15 * (player.morale || 75) / 75);
+    // 化学反应影响：存储在player的teamChemistry字段，50为基准
+    if (player.teamChemistry != null) {
+        base *= (0.95 + 0.05 * (player.teamChemistry) / 50);
+    }
 
     if (role.includes('comeback') && player.skills.includes('藏獒觉醒'))
         base = SKILLS['藏獒觉醒'].onComeback(player, base);
