@@ -638,25 +638,21 @@ const resetToMenu = () => {
   leagueTeams.value.forEach(t => {
     if (t.id !== 'team_mine') {
       t.players.forEach(p => p.roundRecovery());
-      // AI赚点小钱
-      t.gold = (t.gold || 1000) + 500;
-      // AI全力训练：优先核心球员（isCore），其次按能力排序
-      const trainPriority = [...t.players].sort((a, b) => {
-        if (a.isCore && !b.isCore) return -1;
-        if (!a.isCore && b.isCore) return 1;
-        return (b.stats.price || 0) - (a.stats.price || 0);
-      });
+      // AI赚钱 + 强制训练：每轮至少把核心球员练满
+      t.gold = (t.gold || 1000) + 800;
+      // AI训练：优先核心球员，有多少钱练多少
       let aiAttempts = 0;
-      while (aiAttempts < 5 && t.gold > 100) {
+      while (aiAttempts < 8 && t.gold > 80) {
         aiAttempts++;
+        const trainable = [...t.players].filter(p => p.isCore).sort((a, b) => (b.stats.price || 0) - (a.stats.price || 0));
+        if (trainable.length === 0) break;
         let trained = false;
-        for (const p of trainPriority) {
-          const trainableStats = ['serve','receive','forehand','backhand','rally'].filter(s => p.getTrainCost(s) < Infinity && p.getTrainCost(s) <= t.gold);
-          if (trainableStats.length === 0) continue;
-          // 核心球员训练最贵的属性（能力越高花费越高），替补练最便宜的
-          const stat = p.isCore ? trainableStats.sort((a, b) => p.getTrainCost(b) - p.getTrainCost(a))[0] : trainableStats.sort((a, b) => p.getTrainCost(a) - p.getTrainCost(b))[0];
-          const cost = p.getTrainCost(stat);
-          t.gold -= p.trainStat(stat);
+        for (const p of trainable) {
+          const candidates = ['serve','receive','forehand','backhand','rally']
+            .filter(s => p.getTrainCost(s) < Infinity && p.getTrainCost(s) <= t.gold)
+            .sort((a, b) => p.getTrainCost(b) - p.getTrainCost(a)); // 优先最贵的
+          if (candidates.length === 0) continue;
+          t.gold -= p.trainStat(candidates[0]);
           trained = true;
           break;
         }
@@ -1398,6 +1394,40 @@ button.huge { padding: 15px 40px; font-size: 18px; }
   display: inline-block; margin-top: 10px; padding: 2px 10px; background: #e74c3c; color: white;
   font-size: 12px; border-radius: 12px; animation: pulse 2s infinite;
 }
+
+/* ========= 季后赛 ========= */
+.playoff-view { text-align: center; padding: 20px; background: #0f0f23; border-radius: 16px; box-shadow: 0 8px 30px rgba(0,0,0,0.3); color: #fff; }
+.playoff-header h2 { color: #ffd700; margin: 0; font-size: 28px; }
+.playoff-header .desc { color: #aaa; font-size: 14px; }
+.bracket-round { margin: 20px 0; }
+.round-label { font-size: 16px; font-weight: bold; color: #ffd700; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 2px; }
+.round-label.gold { font-size: 20px; }
+.bracket-matches { display: flex; justify-content: center; gap: 20px; flex-wrap: wrap; }
+.bracket-matches.centered { justify-content: center; }
+.bracket-match.card { background: #1a1a3e; border: 1px solid #333; border-radius: 12px; padding: 16px; width: 260px; text-align: center; }
+.bracket-match.card.card-gold { border-color: #ffd700; box-shadow: 0 0 20px rgba(255,215,0,0.2); background: #1a1a2e; }
+.matchup-label { font-size: 12px; color: #888; margin-bottom: 8px; }
+.team-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin: 4px 0; border-radius: 6px; background: #252550; color: #ddd; font-size: 15px; }
+.team-row.is-winner { background: #2a2a5a; color: #fff; font-weight: bold; border: 1px solid #4a4a8a; }
+.team-row.is-player { border-left: 3px solid #ffd700; }
+.team-row .seed { font-size: 11px; color: #888; width: 30px; text-align: left; }
+.team-row .name { flex: 1; text-align: left; }
+.team-row .score { font-weight: bold; color: #ffd700; }
+.vs-divider { font-size: 14px; color: #666; padding: 4px; font-weight: bold; letter-spacing: 2px; }
+.btn-match { margin-top: 10px; padding: 8px 20px; border: none; border-radius: 6px; background: #3498db; color: white; font-size: 14px; cursor: pointer; font-weight: bold; }
+.btn-match.btn-gold { background: #f39c12; color: #1a1a2e; font-size: 16px; padding: 10px 24px; }
+.btn-match:hover { opacity: 0.9; }
+.match-result { margin-top: 8px; font-size: 13px; color: #2ecc71; }
+.bracket-connector { text-align: center; padding: 8px; }
+.connector-line { width: 2px; height: 24px; background: #ffd700; margin: 0 auto; }
+.playoff-champion-banner { text-align: center; padding: 40px 20px; background: linear-gradient(135deg, #1a1a2e, #2a1a3e); border-radius: 16px; margin-top: 20px; }
+.playoff-champion-banner .trophy-big { font-size: 80px; }
+.playoff-champion-name { font-size: 36px; color: #ffd700; text-shadow: 0 0 20px rgba(255,215,0,0.5); margin: 10px 0; }
+.playoff-champion-title { font-size: 18px; color: #aaa; letter-spacing: 4px; text-transform: uppercase; }
+.confetti-line { font-size: 24px; margin: 10px 0; letter-spacing: 8px; }
+.congrats-text { font-size: 18px; color: #ddd; margin: 15px 0; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 8px; }
+
+@keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
 @keyframes pulse {
   0% { transform: scale(1); }
   50% { transform: scale(1.05); }

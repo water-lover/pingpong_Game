@@ -9,16 +9,16 @@ export const SKILLS = {
     /** 樊振东: 王者之心 — 常驻全属性+5%，关键分额外+8%，决胜局额外+5% */
     王者之心: {
         name: '王者之心',
-        desc: '常驻全属性+4%，关键分再+6%',
+        desc: '常驻全属性+3%，关键分再+5%',
         onBeforeCalc(player) {
-            player.stats.serve += 4;
-            player.stats.receive += 4;
-            player.stats.forehand += 4;
-            player.stats.backhand += 4;
-            player.stats.rally += 4;
+            player.stats.serve += 3;
+            player.stats.receive += 3;
+            player.stats.forehand += 3;
+            player.stats.backhand += 3;
+            player.stats.rally += 3;
         },
-        onClutch(player, baseStrength) { return baseStrength * 1.06; },
-        onDeciding(player, baseStrength) { return baseStrength * 1.04; }
+        onClutch(player, baseStrength) { return baseStrength * 1.05; },
+        onDeciding(player, baseStrength) { return baseStrength * 1.03; }
     },
 
     /** 马龙: 六边形战士 — 全属性保底88，相持阶段+3% */
