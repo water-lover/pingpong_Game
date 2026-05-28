@@ -445,12 +445,12 @@ const resetToMenu = () => {
      teamStats.value['team_mine'].wins++
      teamStats.value['team_mine'].points += 3
      teamStats.value[oppId].losses++
-     myTeamGold.value += 500 // 赢球奖金
+     myTeamGold.value += 800 // 赢球奖金
   } else {
      teamStats.value['team_mine'].losses++
      teamStats.value[oppId].wins++
      teamStats.value[oppId].points += 3
-     myTeamGold.value += 200 // 出场费
+     myTeamGold.value += 400 // 出场费
   }
   
   // 2. 模拟后台所有 AI 交手的比赛（含真实体能消耗）
@@ -482,14 +482,14 @@ const resetToMenu = () => {
              teamStats.value[match.home].wins++;
              teamStats.value[match.home].points += 3;
              teamStats.value[match.away].losses++;
-             if (h) h.gold = (h.gold || 0) + 500;
-             if (a) a.gold = (a.gold || 0) + 200;
+             if (h) h.gold = (h.gold || 0) + 800;
+             if (a) a.gold = (a.gold || 0) + 400;
            } else {
              teamStats.value[match.away].wins++;
              teamStats.value[match.away].points += 3;
              teamStats.value[match.home].losses++;
-             if (a) a.gold = (a.gold || 0) + 500;
-             if (h) h.gold = (h.gold || 0) + 200;
+             if (a) a.gold = (a.gold || 0) + 800;
+             if (h) h.gold = (h.gold || 0) + 400;
            }
          }
        }
@@ -502,29 +502,16 @@ const resetToMenu = () => {
     if (t.id !== 'team_mine') {
       t.players.forEach(p => p.roundRecovery());
       // AI赚点小钱
-      t.gold = (t.gold || 1000) + 100;
-      // AI有30%概率从自由市场买人补充（如果还有名额）
-      if (t.players.length < 5 && scoutPoolPlayers.value.length > 0 && Math.random() < 0.3) {
-        let affordable = scoutPoolPlayers.value.filter(sp => sp.stats.price <= t.gold);
-        if (affordable.length > 0) {
-          affordable.sort((a, b) => (b.stats.serve + b.stats.receive + b.stats.forehand + b.stats.backhand) - (a.stats.serve + a.stats.receive + a.stats.forehand + a.stats.backhand));
-          const pick = affordable[0];
-          t.gold -= pick.stats.price;
-          t.players.push(pick);
-          scoutPoolPlayers.value = scoutPoolPlayers.value.filter(sp => sp !== pick);
-        }
-      }
-      // AI自动训练：用剩余资金训练核心球员
-      if (t.gold > 200) {
-        const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
-        if (trainable.length > 0) {
-          const target = trainable.sort((a, b) => b.stats.price - a.stats.price)[0];
-          const stats = ['serve','receive','forehand','backhand','rally'];
-          const trainStat = stats.sort(() => Math.random() - 0.5)[0];
-          const cost = target.getTrainCost(trainStat);
-          if (cost <= t.gold) {
-            t.gold -= target.trainStat(trainStat);
-          }
+      t.gold = (t.gold || 1000) + 200;
+      // AI自动训练：每轮至少训练一次核心球员
+      const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
+      if (trainable.length > 0 && t.gold > 150) {
+        const target = trainable.sort((a, b) => b.stats.price - a.stats.price)[0];
+        const stats = ['serve','receive','forehand','backhand','rally'];
+        const trainStat = stats.sort(() => Math.random() - 0.5)[0];
+        const cost = target.getTrainCost(trainStat);
+        if (cost <= t.gold) {
+          t.gold -= target.trainStat(trainStat);
         }
       }
     }

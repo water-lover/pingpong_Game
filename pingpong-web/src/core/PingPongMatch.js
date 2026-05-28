@@ -257,7 +257,6 @@ function getRNG(tid) {
 function getStaminaCost(player, mult) {
     let c = TACTICS[player.currentTactic].staCost * mult * 0.04;
     if (player.skills.includes('大力神')) c = SKILLS['大力神'].onStaminaCost(c);
-    if (player.skills.includes('常青树')) c = SKILLS['常青树'].onStaminaCost(c);
     return c;
 }
 
@@ -300,7 +299,10 @@ export class GameMatch {
         let receivePower = calcTacticStrength(receiver, mkRole('B', 'receiver'), false, server);
         if (isComeback) {
             const comebackMul = diff >= 7 ? 1.12 : (diff >= 5 ? 1.08 : 1.05);
-            if (trailingA) servePower *= comebackMul; else receivePower *= comebackMul;
+            // 修复：追分加成应始终给落后方，无论谁在发球
+            const trailingPlayer = trailingA ? this.playerA : this.playerB;
+            if (server === trailingPlayer) servePower *= comebackMul;
+            else receivePower *= comebackMul;
         }
 
         const adv = (servePower + getRNG(server.currentTactic)) - (receivePower + getRNG(receiver.currentTactic));
@@ -351,7 +353,8 @@ export class GameMatch {
             // 概率化得分：基础概率×渐进因子（不再+50%基线拖尾）
             const diffScore = la - ld;
             const basePct = 0.50 + diffScore / 30;
-            const atkWinPct = Math.max(0.02, Math.min(0.80, basePct * shotFactor));
+            // 最低3%保底，防止实力差距过大导致0封
+            const atkWinPct = Math.max(0.03, Math.min(0.80, basePct * shotFactor));
             // 同等实力下: rc=1→10%, rc=5→30%, rc=9→50%
             // 大优下: rc=1→20%, rc=5→60%, rc=9→80%
 
