@@ -310,7 +310,7 @@ const goToRoster = () => {
   if (oppPlayers.length > 3) {
     let scored = [...oppPlayers].map(p => ({
       player: p,
-      score: p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + Math.random() * 40
+      score: p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + (p.isCore ? 35 : 0) + Math.random() * 25
     }));
     scored.sort((a, b) => b.score - a.score);
     enemyTeam.value = scored.slice(0, 3).map(s => s.player);
@@ -599,8 +599,8 @@ const resetToMenu = () => {
          const a = leagueTeams.value.find(t => t.id === match.away);
          if (h && a && h.players.length >= 3 && a.players.length >= 3) {
            // 按综合能力+当前体力排序，选出各队最强的3人
-           // AI阵容选人：综合考虑能力+体能+随机轮换
-           const aiRosterScore = (p) => p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + Math.random() * 50;
+           // AI阵容选人：核心球员优先登场，兼顾体能与随机轮换
+           const aiRosterScore = (p) => p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + (p.isCore ? 30 : 0) + Math.random() * 20;
            const homeRoster = [...h.players].sort((x, y) => aiRosterScore(y) - aiRosterScore(x)).slice(0, 3);
            const awayRoster = [...a.players].sort((x, y) => aiRosterScore(y) - aiRosterScore(x)).slice(0, 3);
            // 执行完整的团体赛模拟（含体能消耗）
@@ -640,25 +640,27 @@ const resetToMenu = () => {
       t.players.forEach(p => p.roundRecovery());
       // AI赚点小钱
       t.gold = (t.gold || 1000) + 500;
-      // AI全力训练：只要有钱就练，均衡提升全队
+      // AI全力训练：优先核心球员（isCore），其次按能力排序
+      const trainPriority = [...t.players].sort((a, b) => {
+        if (a.isCore && !b.isCore) return -1;
+        if (!a.isCore && b.isCore) return 1;
+        return (b.stats.price || 0) - (a.stats.price || 0);
+      });
       let aiAttempts = 0;
       while (aiAttempts < 5 && t.gold > 100) {
         aiAttempts++;
-        const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
-        if (trainable.length === 0) break;
-        // 优先训练最便宜的属性（均衡发展）
-        const allOptions = [];
-        t.players.forEach(p => {
-          ['serve','receive','forehand','backhand','rally'].forEach(s => {
-            const cost = p.getTrainCost(s);
-            if (cost < Infinity && cost <= t.gold) allOptions.push({ player: p, stat: s, cost });
-          });
-        });
-        if (allOptions.length === 0) break;
-        // 选最便宜的练（雨露均沾）
-        allOptions.sort((a, b) => a.cost - b.cost);
-        const pick = allOptions[0];
-        t.gold -= pick.player.trainStat(pick.stat);
+        let trained = false;
+        for (const p of trainPriority) {
+          const trainableStats = ['serve','receive','forehand','backhand','rally'].filter(s => p.getTrainCost(s) < Infinity && p.getTrainCost(s) <= t.gold);
+          if (trainableStats.length === 0) continue;
+          // 核心球员训练最贵的属性（能力越高花费越高），替补练最便宜的
+          const stat = p.isCore ? trainableStats.sort((a, b) => p.getTrainCost(b) - p.getTrainCost(a))[0] : trainableStats.sort((a, b) => p.getTrainCost(a) - p.getTrainCost(b))[0];
+          const cost = p.getTrainCost(stat);
+          t.gold -= p.trainStat(stat);
+          trained = true;
+          break;
+        }
+        if (!trained) break;
       }
     }
   })
