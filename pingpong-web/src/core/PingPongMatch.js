@@ -133,27 +133,33 @@ export class Player {
 const TACTICS = {
     normal: {
         label: '常规套路', weights: { serve: 0.18, receive: 0.18, forehand: 0.22, backhand: 0.22, rally: 0.20 },
-        staCost: 0.9, rngRange: 12, rngShift: -6, serveBonus: 0, rallyBonus: 0, desc: '数值均衡，稳字当头'
+        staCost: 0.9, rngRange: 10, rngShift: -5, serveBonus: 0, rallyBonus: 0,
+        failProb: 0.05, failPenalty: -5, desc: '均衡稳健，失误率低'
     },
     aggressive: {
         label: '全线搏杀', weights: { serve: 0.10, receive: 0.10, forehand: 0.38, backhand: 0.22, rally: 0.20 },
-        staCost: 2.0, rngRange: 20, rngShift: -10, serveBonus: 5, rallyBonus: 8, desc: '高风险高回报·易失误'
+        staCost: 2.0, rngRange: 16, rngShift: -8, serveBonus: 8, rallyBonus: 10,
+        failProb: 0.20, failPenalty: -18, desc: '高风险高回报·易失误'
     },
     conservative: {
-        label: '稳扎稳打', weights: { serve: 0.18, receive: 0.22, forehand: 0.15, backhand: 0.20, rally: 0.25 },
-        staCost: 0.5, rngRange: 8, rngShift: -4, serveBonus: 0, rallyBonus: 0, desc: '防守反击，降低失误率'
+        label: '稳扎稳打', weights: { serve: 0.16, receive: 0.22, forehand: 0.16, backhand: 0.20, rally: 0.26 },
+        staCost: 0.5, rngRange: 6, rngShift: -3, serveBonus: -2, rallyBonus: 3,
+        failProb: 0.03, failPenalty: -3, desc: '极低失误，防守稳固，相持略优'
     },
-    target_backhand: {
-        label: '死盯反手', weights: { serve: 0.12, receive: 0.12, forehand: 0.12, backhand: 0.44, rally: 0.20 },
-        staCost: 0.9, rngRange: 12, rngShift: -6, serveBonus: 0, rallyBonus: 4, desc: '压制反手，专打软肋'
+    target_weakness: {
+        label: '死盯落点', weights: { serve: 0.14, receive: 0.14, forehand: 0.22, backhand: 0.22, rally: 0.20 },
+        staCost: 0.9, rngRange: 10, rngShift: -5, serveBonus: 2, rallyBonus: 4,
+        failProb: 0.10, failPenalty: -10, desc: '针对对手弱侧攻击，均衡则随机'
     },
     first_three: {
         label: '前三板', weights: { serve: 0.28, receive: 0.24, forehand: 0.18, backhand: 0.15, rally: 0.15 },
-        staCost: 1.2, rngRange: 12, rngShift: -6, serveBonus: 10, rallyBonus: -3, desc: '强化发接发，前3板爆发'
+        staCost: 1.2, rngRange: 12, rngShift: -6, serveBonus: 10, rallyBonus: -3,
+        failProb: 0.15, failPenalty: -12, desc: '发接发强势，相持偏弱'
     },
     rally_focus: {
         label: '形成相持', weights: { serve: 0.08, receive: 0.08, forehand: 0.20, backhand: 0.20, rally: 0.44 },
-        staCost: 0.6, rngRange: 8, rngShift: -4, serveBonus: -4, rallyBonus: 10, desc: '依赖相持，越打越强'
+        staCost: 0.6, rngRange: 8, rngShift: -4, serveBonus: -4, rallyBonus: 10,
+        failProb: 0.08, failPenalty: -6, desc: '发接发偏弱，越打越强'
     }
 };
 
@@ -165,17 +171,49 @@ const TACTIC_IDS = Object.keys(TACTICS);
  */
 function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null) {
     const t = TACTICS[player.currentTactic] || TACTICS.normal;
-    const w = t.weights;
-    let base = player.stats.serve * w.serve + player.stats.receive * w.receive +
-        player.stats.forehand * w.forehand + player.stats.backhand * w.backhand +
-        player.stats.rally * w.rally;
+    const w = { ...t.weights }; // 浅拷贝，避免影响全局配置
+
+    // ── 死盯落点：动态分析对手弱侧 ──
+    let targetMsg = '';
+    if (player.currentTactic === 'target_weakness' && vsPlayer) {
+        const oppFH = vsPlayer.stats.forehand;
+        const oppBH = vsPlayer.stats.backhand;
+        if (oppBH < oppFH - 3) {
+            w.backhand = 0.40; w.forehand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            targetMsg = '（盯反手）';
+        } else if (oppFH < oppBH - 3) {
+            w.forehand = 0.40; w.backhand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            targetMsg = '（盯正手）';
+        } else {
+            // 均衡：随机出手
+            if (Math.random() < 0.5) {
+                w.forehand = 0.35; w.backhand = 0.15;
+            } else {
+                w.backhand = 0.35; w.forehand = 0.15;
+            }
+            w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            targetMsg = '（随机落点）';
+        }
+    }
+
+    let base = (player.stats.serve || 50) * w.serve + (player.stats.receive || 50) * w.receive +
+        (player.stats.forehand || 50) * w.forehand + (player.stats.backhand || 50) * w.backhand +
+        (player.stats.rally || 50) * w.rally;
+
+    // ── 战术概率执行：大概率成功，小概率失败 ──
+    const execRoll = Math.random();
+    let execFailed = false;
+    if (execRoll < t.failProb) {
+        base += t.failPenalty;
+        execFailed = true;
+    }
 
     if (!isRallyPhase) {
-        base += t.serveBonus;
+        base += execFailed ? -Math.abs(t.serveBonus) * 0.5 : t.serveBonus;
         if (player.skills.includes('发球鬼才') && role.includes('server'))
             base = SKILLS['发球鬼才'].onServe(player, base);
     } else {
-        base += t.rallyBonus;
+        base += execFailed ? -Math.abs(t.rallyBonus) * 0.5 : t.rallyBonus;
         base += (role.includes('attacker') ? player.stats.forehand : player.stats.backhand) * 0.08;
         if (player.skills.includes('太极'))
             base = SKILLS['太极'].onRally(player, base);
@@ -200,14 +238,11 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
     if (role.includes('deciding') && player.skills.includes('王者之心'))
         base = SKILLS['王者之心'].onDeciding(player, base);
 
-    // 对手有怪球手时，减少我的能力
     if (vsPlayer && vsPlayer.skills.includes('怪球手')) {
         base = SKILLS['怪球手'].onConfuse(base);
     }
 
-    // 双胞胎兄弟加成：同队时检查
     if (player.skills.includes('双胞胎兄') || player.skills.includes('双胞胎弟')) {
-        // 注意：此技能在TeamMatch层面处理，这里跳过避免重复
     }
 
     base *= (0.85 + 0.15 * (player.currentMentality / Math.max(1, player.stats.mentality)));

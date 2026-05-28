@@ -291,12 +291,12 @@ const activeSeriesInfo = ref(null)
 // 战术板相关状态
 const isTacticBoardOpen = ref(false)
 const tacticOptions = [
-  { id: 'normal', label: '常规套路', desc: '属性均衡，发挥稳定' },
-  { id: 'aggressive', label: '⚔️ 全线搏杀', desc: '正手权重+38%，爆发力强但失误率高，体能消耗2倍' },
-  { id: 'conservative', label: '🛡️ 稳扎稳打', desc: '接发和相持权重提高，降低失误，体能消耗减半' },
-  { id: 'target_backhand', label: '🎯 死盯反手', desc: '反手权重+44%，专打对手反手弱点' },
-  { id: 'first_three', label: '⚡ 前三板', desc: '发接发权重强化+8%，但相持能力大幅削弱' },
-  { id: 'rally_focus', label: '🏓 形成相持', desc: '相持权重+44%，体能消耗低，但发接发偏弱' }
+  { id: 'normal', label: '常规套路', desc: '均衡稳健，失误率仅5%' },
+  { id: 'aggressive', label: '⚔️ 全线搏杀', desc: '正手爆发+38%，但20%概率失误大掉分' },
+  { id: 'conservative', label: '🛡️ 稳扎稳打', desc: '防守稳固，相持略优，失误率仅3%' },
+  { id: 'target_weakness', label: '🎯 死盯落点', desc: '自动分析对手正/反手弱侧重点攻击' },
+  { id: 'first_three', label: '⚡ 前三板', desc: '发接发特化，15%概率执行失败' },
+  { id: 'rally_focus', label: '🏓 形成相持', desc: '相持权重+44%，发接发偏弱但失误低' }
 ]
 const selectedTactic = ref('normal')
 
