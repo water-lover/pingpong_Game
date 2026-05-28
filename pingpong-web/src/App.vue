@@ -10,6 +10,17 @@ const logs = ref([])
 const showSkillBook = ref(false)
 const showOpponentRoster = ref(false)
 const showTraining = ref(false)
+const showTacticGuide = ref(false)
+
+// 战术克制关系
+const tacticCounters = {
+  normal: { strong: [], weak: ['target_weakness'], desc: '万金油，无明显克制，但容易被针对' },
+  aggressive: { strong: ['conservative'], weak: ['rally_focus'], desc: '压制防守反击，但被相持消耗克制' },
+  conservative: { strong: ['first_three'], weak: ['aggressive'], desc: '克制前三板抢攻，但被暴力搏杀冲垮' },
+  target_weakness: { strong: ['normal'], weak: ['first_three'], desc: '克制常规打法，但被快速抢攻压制' },
+  first_three: { strong: ['rally_focus', 'target_weakness'], weak: ['conservative'], desc: '克制相持和盯人，但被防守反击化解' },
+  rally_focus: { strong: ['aggressive'], weak: ['first_three'], desc: '克制搏杀消耗战，但前三板抢攻是软肋' }
+}
 
 /** 训练球员 */
 const trainPlayer = (p, stat) => {
@@ -104,6 +115,119 @@ const champion = computed(() => {
   if (!isLeagueFinished.value) return null
   return leagueStandings.value[0]
 })
+
+// ══════ 季后赛/杯赛模式 ══════
+const playoffState = ref('idle') // idle → bracket → semis → final → over
+const playoffBracket = ref(null)
+const playoffCurrentMatch = ref(null)
+const playoffFinalTeam = ref(null)
+
+const top4Teams = computed(() => leagueStandings.value.slice(0, 4))
+
+const startPlayoffs = () => {
+  const top4 = top4Teams.value
+  playoffBracket.value = {
+    semis: [
+      { home: top4[0], away: top4[3], winner: null, homeScore: 0, awayScore: 0 },
+      { home: top4[1], away: top4[2], winner: null, homeScore: 0, awayScore: 0 }
+    ],
+    final: { home: null, away: null, winner: null, homeScore: 0, awayScore: 0 }
+  }
+  playoffState.value = 'bracket'
+  appState.value = 'playoff'
+}
+
+const getTeamObj = (standingsEntry) => {
+  const id = Object.keys(teamStats.value).find(k => teamStats.value[k].name === standingsEntry.name)
+  return leagueTeams.value.find(t => t.id === id) || { id: 'team_mine', name: standingsEntry.name, players: [...myTeamPlayers.value] }
+}
+
+const startPlayoffMatch = (isFinal = false) => {
+  const bracket = playoffBracket.value
+  if (isFinal) {
+    playoffCurrentMatch.value = {
+      type: 'final',
+      home: bracket.final.home,
+      away: bracket.final.away,
+      homeTeam: getTeamObj(bracket.final.home),
+      awayTeam: getTeamObj(bracket.final.away),
+    }
+  } else {
+    // 找到未完成的半决赛
+    const semiIdx = bracket.semis.findIndex(s => s.winner === null)
+    if (semiIdx === -1) return
+    const semi = bracket.semis[semiIdx]
+    playoffCurrentMatch.value = {
+      type: 'semifinal',
+      index: semiIdx,
+      home: semi.home,
+      away: semi.away,
+      homeTeam: getTeamObj(semi.home),
+      awayTeam: getTeamObj(semi.away),
+    }
+  }
+  // 进入排兵布阵
+  const match = playoffCurrentMatch.value
+  const homeRoster = match.homeTeam.players.sort((a, b) => (b.stats.serve+b.stats.receive+b.stats.forehand+b.stats.backhand+b.stats.rally+b.stats.stamina*2) - (a.stats.serve+a.stats.receive+a.stats.forehand+a.stats.backhand+a.stats.rally+a.stats.stamina*2)).slice(0, 3)
+  const awayRoster = match.awayTeam.players.sort((a, b) => (b.stats.serve+b.stats.receive+b.stats.forehand+b.stats.backhand+b.stats.rally+b.stats.stamina*2) - (a.stats.serve+a.stats.receive+a.stats.forehand+a.stats.backhand+a.stats.rally+a.stats.stamina*2)).slice(0, 3)
+  
+  if (match.homeTeam.id === 'team_mine') {
+    rosterSlots.value = [null, null, null]
+    enemyTeam.value = awayRoster
+    appState.value = 'roster'
+  } else if (match.awayTeam.id === 'team_mine') {
+    rosterSlots.value = [null, null, null]
+    enemyTeam.value = homeRoster
+    appState.value = 'roster'
+  } else {
+    // AI vs AI, 自动模拟
+    const tm = new TeamMatch(homeRoster, awayRoster); tm.log = () => {}
+    while (!tm.isFinished) { tm.startNextFixture(); const f = tm.fixtures[tm.currentFixtureIndex]; if (f?.match) f.match.playSeriesAuto(); tm.recordFixtureResult() }
+    const homeWon = tm.scoreHome >= 3
+    if (match.type === 'semifinal') {
+      bracket.semis[match.index].winner = homeWon ? match.home : match.away
+      bracket.semis[match.index].homeScore = tm.scoreHome
+      bracket.semis[match.index].awayScore = tm.scoreAway
+    } else {
+      bracket.final.winner = homeWon ? match.home : match.away
+      bracket.final.homeScore = tm.scoreHome
+      bracket.final.awayScore = tm.scoreAway
+      playoffState.value = 'over'
+    }
+    // 检查所有半决赛完成
+    if (bracket.semis.every(s => s.winner !== null) && bracket.final.home === null) {
+      bracket.final.home = bracket.semis[0].winner
+      bracket.final.away = bracket.semis[1].winner
+    }
+  }
+}
+
+const recordPlayoffResult = (homeWon) => {
+  const match = playoffCurrentMatch.value
+  if (!match) return
+  if (match.type === 'semifinal') {
+    playoffBracket.value.semis[match.index].winner = homeWon ? match.home : match.away
+  } else {
+    playoffBracket.value.final.winner = homeWon ? match.home : match.away
+    playoffState.value = 'over'
+  }
+  // 检查是否所有半决赛结束
+  const bracket = playoffBracket.value
+  if (bracket.semis.every(s => s.winner !== null) && bracket.final.home === null) {
+    bracket.final.home = bracket.semis[0].winner
+    bracket.final.away = bracket.semis[1].winner
+    playoffCurrentMatch.value = null
+  }
+}
+
+const goToNextPlayoffMatch = () => {
+  const bracket = playoffBracket.value
+  if (bracket.final.home && bracket.final.away && bracket.final.winner === null) {
+    startPlayoffMatch(true)
+  } else {
+    appState.value = 'playoff'
+  }
+}
 
 // 俱乐部可用球员池 (供布阵使用)
 const playerPool = computed(() => myTeamPlayers.value)
@@ -437,6 +561,21 @@ const saveGame = () => {
 }
 
 const resetToMenu = () => {
+  // 季后赛模式：不记录联赛积分，直接记录季后赛结果
+  if (playoffState.value !== 'idle') {
+    const isWin = teamScore.value.home >= 3
+    recordPlayoffResult(isWin)
+    appState.value = 'playoff'
+    rosterSlots.value = [null, null, null]
+    teamScore.value = { home: 0, away: 0 }
+    fixtures.value = []
+    activeFixtureIndex.value = 0
+    isMatchFinished.value = false
+    currentTeamMatch = null
+    logs.value = []
+    return
+  }
+
   // 1. 玩家比赛结果结算
   const isWin = teamScore.value.home >= 3
   const oppId = getNextOpponentId()
@@ -661,7 +800,79 @@ const resetGame = () => {
       </div>
 
       <div class="action-bar mt">
-        <button class="btn-primary huge" @click="resetGame">🔄 开始新赛季</button>
+        <button class="btn-primary huge" @click="startPlayoffs" style="background:#8e44ad;margin-right:15px;">🏆 进入季后赛</button>
+        <button class="btn-secondary huge" @click="resetGame">🔄 开始新赛季</button>
+      </div>
+    </div>
+
+    <!-- ================= 季后赛模式 ================= -->
+    <div v-if="appState === 'playoff'" class="playoff-view">
+      <h2>🏆 季后赛</h2>
+      <p class="desc">常规赛前4名进入淘汰赛，一局定胜负！</p>
+
+      <div class="playoff-bracket">
+        <div class="bracket-round">
+          <h3>半决赛</h3>
+          <div class="bracket-match" v-for="(s, i) in playoffBracket?.semis || []" :key="i">
+            <div class="match-teams">
+              <div class="team-line" :class="{'winner': s.winner === s.home, 'my-team': s.home.name === '本质队'}">
+                <span class="team-name">{{ s.home.name }}</span>
+                <span class="team-score">{{ s.homeScore }}</span>
+              </div>
+              <div class="team-line" :class="{'winner': s.winner === s.away, 'my-team': s.away.name === '本质队'}">
+                <span class="team-name">{{ s.away.name }}</span>
+                <span class="team-score">{{ s.awayScore }}</span>
+              </div>
+            </div>
+            <button v-if="!s.winner" class="btn-small" @click="startPlayoffMatch(false)">开始比赛</button>
+            <span v-else class="winner-tag">✓ {{ s.winner.name }}晋级</span>
+          </div>
+        </div>
+
+        <div class="bracket-connector" v-if="playoffBracket?.semis?.every(s => s.winner)">⬇</div>
+
+        <div class="bracket-round" v-if="playoffBracket?.final?.home">
+          <h3>🏆 决赛</h3>
+          <div class="bracket-match final-match">
+            <div class="match-teams">
+              <div class="team-line" :class="{'winner': playoffBracket.final.winner === playoffBracket.final.home, 'my-team': playoffBracket.final.home.name === '本质队'}">
+                <span class="team-name">{{ playoffBracket.final.home.name }}</span>
+                <span class="team-score">{{ playoffBracket.final.homeScore }}</span>
+              </div>
+              <div class="team-line" :class="{'winner': playoffBracket.final.winner === playoffBracket.final.away, 'my-team': playoffBracket.final.away.name === '本质队'}">
+                <span class="team-name">{{ playoffBracket.final.away.name }}</span>
+                <span class="team-score">{{ playoffBracket.final.awayScore }}</span>
+              </div>
+            </div>
+            <button v-if="!playoffBracket.final.winner" class="btn-small btn-gold" @click="startPlayoffMatch(true)">开始决赛！</button>
+            <div v-else class="champion-crown">
+              👑 {{ playoffBracket.final.winner.name }} 是季后赛总冠军！
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="playoffState === 'over'" class="action-bar mt">
+        <button class="btn-primary huge" @click="resetGame">🔄 新赛季</button>
+      </div>
+    </div>
+
+    <!-- ================= 战术克制指南 ================= -->
+    <div v-if="showTacticGuide" class="modal-overlay" @click.self="showTacticGuide = false">
+      <div class="modal-content" style="max-width:500px;">
+        <h3>📖 战术克制指南</h3>
+        <table class="standings-table" style="margin-top:10px;">
+          <thead><tr><th>战术</th><th>克制</th><th>被克制</th><th>说明</th></tr></thead>
+          <tbody>
+            <tr v-for="(info, id) in tacticCounters" :key="id">
+              <td><strong>{{ {normal:'常规',aggressive:'搏杀',conservative:'稳扎',target_weakness:'盯人',first_three:'前三板',rally_focus:'相持'}[id] }}</strong></td>
+              <td>{{ info.strong.length ? info.strong.map(s => ({normal:'常规',aggressive:'搏杀',conservative:'稳扎',target_weakness:'盯人',first_three:'前三板',rally_focus:'相持'})[s]).join('、') : '—' }}</td>
+              <td>{{ info.weak.length ? info.weak.map(s => ({normal:'常规',aggressive:'搏杀',conservative:'稳扎',target_weakness:'盯人',first_three:'前三板',rally_focus:'相持'})[s]).join('、') : '—' }}</td>
+              <td style="font-size:12px;color:#666;">{{ info.desc }}</td>
+            </tr>
+          </tbody>
+        </table>
+        <button class="btn-secondary mt" @click="showTacticGuide = false">关闭</button>
       </div>
     </div>
 
@@ -933,6 +1144,7 @@ const resetGame = () => {
             </div>
           </div>
           <div class="modal-actions">
+            <button class="btn-secondary" @click="showTacticGuide = true">📖 战术克制</button>
             <button class="btn-secondary" @click="isTacticBoardOpen = false; selectedTactic = 'normal'">取消</button>
             <button class="btn-action huge" @click="applyTactic">确认战术，回到赛场！</button>
           </div>
