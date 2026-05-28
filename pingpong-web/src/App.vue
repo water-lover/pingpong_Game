@@ -235,6 +235,9 @@ const playerPool = computed(() => myTeamPlayers.value)
 // AI 的队伍 (客队)
 const enemyTeam = ref(null)
 
+// 球探与转会市场
+const scoutPoolPlayers = ref([])
+
 // 选秀界面：玩家从自由市场招募
 const draftPlayer = (p) => {
   if (myTeamPlayers.value.length >= MAX_TEAM_SIZE) {
@@ -318,6 +321,10 @@ const goToRoster = () => {
 }
 
 const MAX_TEAM_SIZE = 5 // 队伍人数上限
+
+const openScout = () => {
+  appState.value = 'scout'
+}
 
 const buyPlayer = (p, isFromOtherTeam = false) => {
   // 检查人数上限
