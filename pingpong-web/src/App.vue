@@ -899,7 +899,7 @@ const resetGame = () => {
     </div>
 
     <!-- ================= 战术克制指南 ================= -->
-    <div v-if="showTacticGuide" class="modal-overlay" @click.self="showTacticGuide = false">
+    <div v-if="showTacticGuide" class="modal-overlay" @click.self="showTacticGuide = false" style="z-index:2000;">
       <div class="modal-content" style="max-width:500px;">
         <h3>📖 战术克制指南</h3>
         <table class="standings-table" style="margin-top:10px;">
