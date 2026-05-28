@@ -558,10 +558,20 @@ const saveGame = () => {
 }
 
 const resetToMenu = () => {
-  // 季后赛模式：不记录联赛积分，直接记录季后赛结果
+  // 季后赛模式
   if (playoffState.value !== 'idle') {
     const isWin = teamScore.value.home >= 3
+    // 季后赛每轮结束后恢复体力（让战术博弈成为可能）
+    myTeamPlayers.value.forEach(p => p.roundRecovery())
     recordPlayoffResult(isWin)
+    // 检查决赛是否就绪且玩家参与其中 → 直接进入决赛
+    const bracket = playoffBracket.value
+    if (bracket?.final?.home && bracket?.final?.away && !bracket.final.winner) {
+      const playerInFinal = bracket.final.home.name === '本质队' || bracket.final.away.name === '本质队'
+      if (playerInFinal) {
+        startPlayoffMatch(true)
+      }
+    }
     appState.value = 'playoff'
     rosterSlots.value = [null, null, null]
     teamScore.value = { home: 0, away: 0 }
@@ -569,6 +579,7 @@ const resetToMenu = () => {
     activeFixtureIndex.value = 0
     isMatchFinished.value = false
     currentTeamMatch = null
+    enemyTeam.value = null
     logs.value = []
     return
   }
