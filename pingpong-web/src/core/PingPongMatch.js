@@ -147,7 +147,7 @@ const TACTICS = {
         failProb: 0.03, failPenalty: -3, desc: '极低失误，防守稳固，相持略优'
     },
     target_weakness: {
-        label: '死盯落点', weights: { serve: 0.14, receive: 0.14, forehand: 0.22, backhand: 0.22, rally: 0.20 },
+        label: '死盯落点', weights: { serve: 0.14, receive: 0.14, forehand: 0.22, backhand: 0.22, rally: 0.28 },
         staCost: 0.9, rngRange: 10, rngShift: -5, serveBonus: 2, rallyBonus: 4,
         failProb: 0.10, failPenalty: -10, desc: '针对对手弱侧攻击，均衡则随机'
     },
@@ -179,10 +179,10 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
         const oppFH = vsPlayer.stats.forehand;
         const oppBH = vsPlayer.stats.backhand;
         if (oppBH < oppFH - 3) {
-            w.backhand = 0.40; w.forehand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            w.backhand = 0.40; w.forehand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.25;
             targetMsg = '（盯反手）';
         } else if (oppFH < oppBH - 3) {
-            w.forehand = 0.40; w.backhand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            w.forehand = 0.40; w.backhand = 0.10; w.serve = 0.12; w.receive = 0.13; w.rally = 0.25;
             targetMsg = '（盯正手）';
         } else {
             // 均衡：随机出手
@@ -191,7 +191,7 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
             } else {
                 w.backhand = 0.35; w.forehand = 0.15;
             }
-            w.serve = 0.12; w.receive = 0.13; w.rally = 0.18;
+            w.serve = 0.12; w.receive = 0.13; w.rally = 0.25;
             targetMsg = '（随机落点）';
         }
     }
