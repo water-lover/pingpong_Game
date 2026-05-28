@@ -309,28 +309,31 @@ export class GameMatch {
             atk.currentStamina = Math.max(0, atk.currentStamina - getStaminaCost(atk, 0.5));
             def.currentStamina = Math.max(0, def.currentStamina - getStaminaCost(def, 0.4));
 
-            // 渐进因子：前几板概率压缩以形成相持，随后快速释放
-            const shotFactor = Math.min(1.0, (rc + 1) / 8);
-            // rc=1→0.25, rc=3→0.50, rc=5→0.75, rc=7→1.0
+            // 渐进因子：前几板压低概率让相持打起来，随后逐渐释放
+            const shotFactor = Math.min(1.0, (rc + 1) / 10);
+            // rc=1→0.20, rc=3→0.40, rc=5→0.60, rc=7→0.80, rc=9→1.0
 
-            // 概率化得分：差值越大得分概率越高
+            // 概率化得分：基础概率×渐进因子（不再+50%基线拖尾）
             const diffScore = la - ld;
             const basePct = 0.50 + diffScore / 30;
-            const atkWinPct = Math.max(0.04, Math.min(0.94, basePct * shotFactor + 0.50 * (1 - shotFactor)));
-            // 前几板概率被压低向50%靠拢，保证能打上几板
+            const atkWinPct = Math.max(0.02, Math.min(0.80, basePct * shotFactor));
+            // 同等实力下: rc=1→10%, rc=5→30%, rc=9→50%
+            // 大优下: rc=1→20%, rc=5→60%, rc=9→80%
 
             if (Math.random() < atkWinPct) {
                 pw = atk;
-                if (rc >= 8) this.log(`🔥 [多板相持·${rc}板] ${atk.name} 拿下！`);
-                else if (rc >= 4) this.log(`[相持·${rc}板] ${atk.name} 得分`);
+                if (rc >= 10) this.log(`🔥 [多板相持·${rc}板] ${atk.name} 拿下！`);
+                else if (rc >= 5) this.log(`[相持·${rc}板] ${atk.name} 得分`);
+                else if (rc >= 3) this.log(`[过渡·${rc}板] ${atk.name} 得分`);
                 else this.log(`[短球·${rc}板] ${atk.name} 得分`);
                 break;
             }
 
-            // 防守方小概率反击（随板数增加）
-            if (Math.random() < 0.04 * shotFactor) {
+            // 防守方小概率反击（前几板极低，rc=6后趋稳）
+            if (Math.random() < 0.03 * Math.min(1.0, rc / 6)) {
                 pw = def;
                 if (rc >= 8) this.log(`🔄 [反击·${rc}板] ${def.name} 防守反击得分！`);
+                else if (rc >= 4) this.log(`[反击·${rc}板] ${def.name} 反击得分！`);
                 else this.log(`[反击·${rc}板] ${def.name} 反击得分！`);
                 break;
             }
