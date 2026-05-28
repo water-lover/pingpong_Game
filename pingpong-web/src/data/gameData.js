@@ -99,17 +99,17 @@ export const leagueAICaching = [
     {
         id: 'team_eu', name: '黑马队', wins: 0, losses: 0, gold: 1500,
         players: [
-            corePlayer('张本智和', { serve: 93, receive: 92, forehand: 90, backhand: 97, rally: 92, stamina: 98, mentality: 97, price: 800 }),
-            corePlayer('林昀儒', { serve: 97, receive: 97, forehand: 87, backhand: 99, rally: 87, stamina: 96, mentality: 97, price: 800 }),
-            corePlayer('林诗栋', { serve: 94, receive: 94, forehand: 93, backhand: 96, rally: 92, stamina: 97, mentality: 86, price: 800 }),
+            corePlayer('张本智和', { serve: 94, receive: 92, forehand: 92, backhand: 97, rally: 93, stamina: 98, mentality: 97, price: 800 }),
+            corePlayer('林昀儒', { serve: 97, receive: 97, forehand: 89, backhand: 99, rally: 89, stamina: 97, mentality: 97, price: 800 }),
+            corePlayer('林诗栋', { serve: 95, receive: 95, forehand: 93, backhand: 97, rally: 92, stamina: 97, mentality: 88, price: 800 }),
         ]
     },
     {
         id: 'team_na', name: '新星队', wins: 0, losses: 0, gold: 1500,
         players: [
-            corePlayer('大勒布伦', { serve: 91, receive: 91, forehand: 91, backhand: 91, rally: 91, stamina: 95, mentality: 91, price: 800 }),
-            corePlayer('小勒布伦', { serve: 90, receive: 91, forehand: 90, backhand: 95, rally: 92, stamina: 95, mentality: 90, price: 800 }),
-            corePlayer('科曼', { serve: 88, receive: 90, forehand: 90, backhand: 93, rally: 90, stamina: 95, mentality: 90, price: 800 }),
+            corePlayer('大勒布伦', { serve: 92, receive: 92, forehand: 92, backhand: 92, rally: 92, stamina: 96, mentality: 91, price: 800 }),
+            corePlayer('小勒布伦', { serve: 91, receive: 91, forehand: 91, backhand: 96, rally: 92, stamina: 95, mentality: 90, price: 800 }),
+            corePlayer('科曼', { serve: 89, receive: 90, forehand: 91, backhand: 94, rally: 91, stamina: 95, mentality: 90, price: 800 }),
         ]
     }
 ];

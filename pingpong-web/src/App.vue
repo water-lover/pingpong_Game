@@ -303,28 +303,18 @@ const getNextOpponent = () => {
 
 const goToRoster = () => {
   const oppPlayers = getNextOpponent().players
-  // 如果人机队伍有多名球员（>3），让人机进行“合理”选人（按平均属性和体能优先挑选）
+  // 人机选人：优先体能好的，同时随机轮换让替补有机会上场
   if (oppPlayers.length > 3) {
-    let sortedBest = [...oppPlayers].sort((a, b) => {
-      // 综合评分 = 基础属性之和 + 体能
-      const scoreA = a.stats.serve + a.stats.receive + a.stats.forehand + a.stats.backhand + a.stats.rally + a.stats.stamina * 2;
-      const scoreB = b.stats.serve + b.stats.receive + b.stats.forehand + b.stats.backhand + b.stats.rally + b.stats.stamina * 2;
-      return scoreB - scoreA;
-    });
-    // 选出能力最好的3个人
-    enemyTeam.value = sortedBest.slice(0, 3);
+    let scored = [...oppPlayers].map(p => ({
+      player: p,
+      score: p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + Math.random() * 40
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    enemyTeam.value = scored.slice(0, 3).map(s => s.player);
   } else {
     enemyTeam.value = oppPlayers
   }
   appState.value = 'roster'
-}
-
-// 球探与转会市场
-const scoutPoolPlayers = ref([])
-
-const openScout = () => {
-  // 如果自由市场空了，就直接打开，不强行生成
-  appState.value = 'scout'
 }
 
 const MAX_TEAM_SIZE = 5 // 队伍人数上限
@@ -602,9 +592,10 @@ const resetToMenu = () => {
          const a = leagueTeams.value.find(t => t.id === match.away);
          if (h && a && h.players.length >= 3 && a.players.length >= 3) {
            // 按综合能力+当前体力排序，选出各队最强的3人
-           const sortFn = (p) => p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2;
-           const homeRoster = [...h.players].sort((x, y) => sortFn(y) - sortFn(x)).slice(0, 3);
-           const awayRoster = [...a.players].sort((x, y) => sortFn(y) - sortFn(x)).slice(0, 3);
+           // AI阵容选人：综合考虑能力+体能+随机轮换
+           const aiRosterScore = (p) => p.stats.serve + p.stats.receive + p.stats.forehand + p.stats.backhand + p.stats.rally + (p.currentStamina || p.stats.stamina) * 2 + Math.random() * 50;
+           const homeRoster = [...h.players].sort((x, y) => aiRosterScore(y) - aiRosterScore(x)).slice(0, 3);
+           const awayRoster = [...a.players].sort((x, y) => aiRosterScore(y) - aiRosterScore(x)).slice(0, 3);
            // 执行完整的团体赛模拟（含体能消耗）
            const tm = new TeamMatch(homeRoster, awayRoster);
            tm.log = () => {}; // 静默模拟
@@ -642,19 +633,25 @@ const resetToMenu = () => {
       t.players.forEach(p => p.roundRecovery());
       // AI赚点小钱
       t.gold = (t.gold || 1000) + 500;
-      // AI每轮尽量把资金用于训练（与玩家同等培养机会）
-      let attempts = 0;
-      while (attempts < 3 && t.gold > 150) {
-        attempts++;
+      // AI全力训练：只要有钱就练，均衡提升全队
+      let aiAttempts = 0;
+      while (aiAttempts < 5 && t.gold > 100) {
+        aiAttempts++;
         const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
         if (trainable.length === 0) break;
-        const target = trainable.sort((a, b) => b.stats.price - a.stats.price)[0];
-        const stats = ['serve','receive','forehand','backhand','rally'];
-        const trainStat = stats.sort(() => Math.random() - 0.5)[0];
-        const cost = target.getTrainCost(trainStat);
-        if (cost <= t.gold) {
-          t.gold -= target.trainStat(trainStat);
-        } else break;
+        // 优先训练最便宜的属性（均衡发展）
+        const allOptions = [];
+        t.players.forEach(p => {
+          ['serve','receive','forehand','backhand','rally'].forEach(s => {
+            const cost = p.getTrainCost(s);
+            if (cost < Infinity && cost <= t.gold) allOptions.push({ player: p, stat: s, cost });
+          });
+        });
+        if (allOptions.length === 0) break;
+        // 选最便宜的练（雨露均沾）
+        allOptions.sort((a, b) => a.cost - b.cost);
+        const pick = allOptions[0];
+        t.gold -= pick.player.trainStat(pick.stat);
       }
     }
   })
@@ -807,53 +804,74 @@ const resetGame = () => {
 
     <!-- ================= 季后赛模式 ================= -->
     <div v-if="appState === 'playoff'" class="playoff-view">
-      <h2>🏆 季后赛</h2>
-      <p class="desc">常规赛前4名进入淘汰赛，一局定胜负！</p>
+      <div class="playoff-header">
+        <h2>🏆 季后赛 · 淘汰赛</h2>
+        <p class="desc">常规赛前4名进入淘汰赛，每轮为完整团体赛，体力不恢复！</p>
+      </div>
 
-      <div class="playoff-bracket">
-        <div class="bracket-round">
-          <h3>半决赛</h3>
-          <div class="bracket-match" v-for="(s, i) in playoffBracket?.semis || []" :key="i">
-            <div class="match-teams">
-              <div class="team-line" :class="{'winner': s.winner === s.home, 'my-team': s.home.name === '本质队'}">
-                <span class="team-name">{{ s.home.name }}</span>
-                <span class="team-score">{{ s.homeScore }}</span>
-              </div>
-              <div class="team-line" :class="{'winner': s.winner === s.away, 'my-team': s.away.name === '本质队'}">
-                <span class="team-name">{{ s.away.name }}</span>
-                <span class="team-score">{{ s.awayScore }}</span>
-              </div>
+      <!-- 半决赛 -->
+      <div class="bracket-round">
+        <div class="round-label">半决赛（Bo5团体赛）</div>
+        <div class="bracket-matches">
+          <div class="bracket-match card" v-for="(s, i) in playoffBracket?.semis || []" :key="i">
+            <div class="matchup-label">{{ i === 0 ? '1st vs 4th' : '2nd vs 3rd' }}</div>
+            <div class="team-row" :class="{'is-winner': s.winner === s.home, 'is-player': s.home.name === '本质队'}">
+              <span class="seed">#{{ i === 0 ? '1' : '2' }}</span>
+              <span class="name">{{ s.home.name }}</span>
+              <span class="score">{{ s.homeScore }}{{ s.winner === s.home ? ' ✓' : '' }}</span>
             </div>
-            <button v-if="!s.winner" class="btn-small" @click="startPlayoffMatch(false)">开始比赛</button>
-            <span v-else class="winner-tag">✓ {{ s.winner.name }}晋级</span>
-          </div>
-        </div>
-
-        <div class="bracket-connector" v-if="playoffBracket?.semis?.every(s => s.winner)">⬇</div>
-
-        <div class="bracket-round" v-if="playoffBracket?.final?.home">
-          <h3>🏆 决赛</h3>
-          <div class="bracket-match final-match">
-            <div class="match-teams">
-              <div class="team-line" :class="{'winner': playoffBracket.final.winner === playoffBracket.final.home, 'my-team': playoffBracket.final.home.name === '本质队'}">
-                <span class="team-name">{{ playoffBracket.final.home.name }}</span>
-                <span class="team-score">{{ playoffBracket.final.homeScore }}</span>
-              </div>
-              <div class="team-line" :class="{'winner': playoffBracket.final.winner === playoffBracket.final.away, 'my-team': playoffBracket.final.away.name === '本质队'}">
-                <span class="team-name">{{ playoffBracket.final.away.name }}</span>
-                <span class="team-score">{{ playoffBracket.final.awayScore }}</span>
-              </div>
+            <div class="team-row" :class="{'is-winner': s.winner === s.away, 'is-player': s.away.name === '本质队'}">
+              <span class="seed">#{{ i === 0 ? '4' : '3' }}</span>
+              <span class="name">{{ s.away.name }}</span>
+              <span class="score">{{ s.awayScore }}{{ s.winner === s.away ? ' ✓' : '' }}</span>
             </div>
-            <button v-if="!playoffBracket.final.winner" class="btn-small btn-gold" @click="startPlayoffMatch(true)">开始决赛！</button>
-            <div v-else class="champion-crown">
-              👑 {{ playoffBracket.final.winner.name }} 是季后赛总冠军！
-            </div>
+            <button v-if="!s.winner" class="btn-match" @click="startPlayoffMatch(false)">⚔️ 开赛</button>
+            <div v-else class="match-result">{{ s.winner.name }} 晋级决赛</div>
           </div>
         </div>
       </div>
 
-      <div v-if="playoffState === 'over'" class="action-bar mt">
-        <button class="btn-primary huge" @click="resetGame">🔄 新赛季</button>
+      <!-- 连线 -->
+      <div class="bracket-connector" v-if="playoffBracket?.semis?.every(s => s.winner)">
+        <div class="connector-line"></div>
+      </div>
+
+      <!-- 决赛 -->
+      <div class="bracket-round final-section" v-if="playoffBracket?.final?.home">
+        <div class="round-label gold">🏆 决赛</div>
+        <div class="bracket-matches centered">
+          <div class="bracket-match final-match card card-gold">
+            <div class="team-row" :class="{'is-winner': playoffBracket.final.winner === playoffBracket.final.home, 'is-player': playoffBracket.final.home.name === '本质队'}">
+              <span class="seed">SF1</span>
+              <span class="name">{{ playoffBracket.final.home.name }}</span>
+              <span class="score">{{ playoffBracket.final.homeScore }}{{ playoffBracket.final.winner === playoffBracket.final.home ? ' 👑' : '' }}</span>
+            </div>
+            <div class="vs-divider">VS</div>
+            <div class="team-row" :class="{'is-winner': playoffBracket.final.winner === playoffBracket.final.away, 'is-player': playoffBracket.final.away.name === '本质队'}">
+              <span class="seed">SF2</span>
+              <span class="name">{{ playoffBracket.final.away.name }}</span>
+              <span class="score">{{ playoffBracket.final.awayScore }}{{ playoffBracket.final.winner === playoffBracket.final.away ? ' 👑' : '' }}</span>
+            </div>
+            <button v-if="!playoffBracket.final.winner" class="btn-match btn-gold" @click="startPlayoffMatch(true)">🏆 总决赛开赛！</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 季后赛冠军 -->
+      <div v-if="playoffState === 'over'" class="playoff-champion-banner">
+        <div class="trophy-big">🏆</div>
+        <h1 class="playoff-champion-name">{{ playoffBracket?.final?.winner?.name }}</h1>
+        <p class="playoff-champion-title">季后赛总冠军</p>
+        <div class="confetti-line">🎊 🎉 🏆 🎉 🎊</div>
+        <div v-if="playoffBracket?.final?.winner?.name === '本质队'" class="congrats-text">
+          🥇 恭喜你夺得季后赛总冠军！这是双冠王伟业！
+        </div>
+        <div v-else class="congrats-text">
+          💪 下赛季再来，季后赛冠军终将属于你！
+        </div>
+        <div class="action-bar mt">
+          <button class="btn-primary huge" @click="resetGame">🔄 开始新赛季</button>
+        </div>
       </div>
     </div>
 
