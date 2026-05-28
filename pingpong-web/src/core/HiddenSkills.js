@@ -106,11 +106,14 @@ export const SKILLS = {
         }
     },
 
-    /** 波尔: 常青树 — 体能下降速度减慢40% */
-    常青树: {
-        name: '常青树',
-        desc: '体能消耗-40%',
-        onStaminaCost(cost) { return cost * 0.6; }
+    /** 波尔: 欧洲之巅 — 欧洲技术流，接发+3，相持+4 */
+    欧洲之巅: {
+        name: '欧洲之巅',
+        desc: '接发+3，相持+4',
+        onBeforeCalc(player) {
+            player.stats.receive += 3;
+        },
+        onRally(player, baseStrength) { return baseStrength + 4; }
     },
 
     /** 奥恰洛夫: 潜水艇 — 发球+5(诡异的发球动作) */
@@ -307,7 +310,7 @@ export function getPlayerSkills(playerName) {
         '王励勤': ['大力神'],
         '张本智和': ['嘶吼'],
         '林昀儒': ['沉默刺客'],
-        '波尔': ['常青树'],
+        '波尔': ['欧洲之巅'],
         '奥恰洛夫': ['潜水艇'],
         '萨姆索诺夫': ['太极'],
         '王皓': ['直拍横打'],

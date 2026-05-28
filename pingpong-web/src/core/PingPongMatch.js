@@ -149,11 +149,11 @@ const TACTICS = {
     },
     first_three: {
         label: '前三板', weights: { serve: 0.28, receive: 0.24, forehand: 0.18, backhand: 0.15, rally: 0.15 },
-        staCost: 1.2, rngRange: 14, rngShift: -7, serveBonus: 8, rallyBonus: -5, desc: '强化发接发，削弱相持'
+        staCost: 1.2, rngRange: 12, rngShift: -6, serveBonus: 10, rallyBonus: -3, desc: '强化发接发，前3板爆发'
     },
     rally_focus: {
         label: '形成相持', weights: { serve: 0.08, receive: 0.08, forehand: 0.20, backhand: 0.20, rally: 0.44 },
-        staCost: 0.6, rngRange: 10, rngShift: -5, serveBonus: -3, rallyBonus: 8, desc: '大幅依赖相持与体能'
+        staCost: 0.6, rngRange: 8, rngShift: -4, serveBonus: -4, rallyBonus: 10, desc: '依赖相持，越打越强'
     }
 };
 
@@ -179,6 +179,8 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
         base += (role.includes('attacker') ? player.stats.forehand : player.stats.backhand) * 0.08;
         if (player.skills.includes('太极'))
             base = SKILLS['太极'].onRally(player, base);
+        if (player.skills.includes('欧洲之巅'))
+            base = SKILLS['欧洲之巅'].onRally(player, base);
     }
 
     if (player.skills.includes('战术大师'))
@@ -268,15 +270,15 @@ export class GameMatch {
 
         const adv = (servePower + getRNG(server.currentTactic)) - (receivePower + getRNG(receiver.currentTactic));
 
-        // 发球/接发直接得分（阈值降低）
-        if (adv > 20) {
+        // 发球/接发直接得分
+        if (adv > 25) {
             this.scorePoint(this.turn === 'A' ? 'A' : 'B');
             server.currentStamina = Math.max(0, server.currentStamina - 0.3);
             receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.2);
             this.log(`⚡ [发球得分] ${server.name} 发球直接得分！`);
             this._afterPoint(server === this.playerA); this._finishPoint(); return;
         }
-        if (adv < -22) {
+        if (adv < -28) {
             this.scorePoint(this.turn === 'A' ? 'B' : 'A');
             receiver.currentStamina = Math.max(0, receiver.currentStamina - 0.3);
             server.currentStamina = Math.max(0, server.currentStamina - 0.2);
@@ -307,14 +309,13 @@ export class GameMatch {
             atk.currentStamina = Math.max(0, atk.currentStamina - getStaminaCost(atk, 0.5));
             def.currentStamina = Math.max(0, def.currentStamina - getStaminaCost(def, 0.4));
 
-            // 渐进因子：前几板不容易得分（让相持能打起来）
-            const shotFactor = Math.min(1.0, (rc + 3) / 12);
-            // rc=1→0.33, rc=3→0.50, rc=5→0.67, rc=9→1.0
+            // 渐进因子：前几板概率压缩以形成相持，随后快速释放
+            const shotFactor = Math.min(1.0, (rc + 1) / 8);
+            // rc=1→0.25, rc=3→0.50, rc=5→0.75, rc=7→1.0
 
             // 概率化得分：差值越大得分概率越高
             const diffScore = la - ld;
-            // 基础概率 = 50% + 差值/35，再乘以渐进因子
-            const basePct = 0.50 + diffScore / 35;
+            const basePct = 0.50 + diffScore / 30;
             const atkWinPct = Math.max(0.04, Math.min(0.94, basePct * shotFactor + 0.50 * (1 - shotFactor)));
             // 前几板概率被压低向50%靠拢，保证能打上几板
 

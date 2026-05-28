@@ -32,7 +32,7 @@ export const starterGroups = [
         players: [
             // 樊振东小幅削弱(仍最强)
             plainPlayer('樊振东', { serve: 90, receive: 94, forehand: 96, backhand: 96, rally: 98, stamina: 95, mentality: 100, price: 1000 }),
-            plainPlayer('波尔', { serve: 94, receive: 94, forehand: 96, backhand: 96, rally: 97, stamina: 88, mentality: 96, price: 800 }),
+            plainPlayer('波尔', { serve: 93, receive: 95, forehand: 95, backhand: 97, rally: 98, stamina: 88, mentality: 96, price: 800 }),
             plainPlayer('莫雷高德', { serve: 82, receive: 90, forehand: 92, backhand: 72, rally: 95, stamina: 93, mentality: 72, price: 800 }),
         ]
     },
