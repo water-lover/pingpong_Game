@@ -47,7 +47,7 @@ export const starterGroups = [
     {
         id: 'group_3', name: 'C组',
         players: [
-            plainPlayer('张继科', { serve: 90, receive: 96, forehand: 95, backhand: 100, rally: 97, stamina: 92, mentality: 100, price: 1000 }),
+            plainPlayer('张继科', { serve: 91, receive: 96, forehand: 97, backhand: 100, rally: 98, stamina: 94, mentality: 100, price: 1000 }),
             plainPlayer('王皓', { serve: 94, receive: 93, forehand: 97, backhand: 96, rally: 96, stamina: 88, mentality: 92, price: 900 }),
             plainPlayer('马琳', { serve: 100, receive: 98, forehand: 97, backhand: 82, rally: 82, stamina: 80, mentality: 96, price: 800 }),
         ]

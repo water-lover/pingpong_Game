@@ -205,10 +205,17 @@ const startPlayoffMatch = (isFinal = false) => {
 const recordPlayoffResult = (homeWon) => {
   const match = playoffCurrentMatch.value
   if (!match) return
+  // 记录比分
+  const homeScore = teamScore.value?.home ?? 0
+  const awayScore = teamScore.value?.away ?? 0
   if (match.type === 'semifinal') {
     playoffBracket.value.semis[match.index].winner = homeWon ? match.home : match.away
+    playoffBracket.value.semis[match.index].homeScore = homeScore
+    playoffBracket.value.semis[match.index].awayScore = awayScore
   } else {
     playoffBracket.value.final.winner = homeWon ? match.home : match.away
+    playoffBracket.value.final.homeScore = homeScore
+    playoffBracket.value.final.awayScore = awayScore
     playoffState.value = 'over'
   }
   // 检查是否所有半决赛结束

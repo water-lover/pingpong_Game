@@ -37,13 +37,13 @@ export const SKILLS = {
         onRally(player, baseStrength) { return baseStrength + 6; }
     },
 
-    /** 张继科: 藏獒觉醒 — 落后时爆发+10%，反手+2常驻 */
+    /** 张继科: 藏獒觉醒 — 落后时爆发+12%，反手+3常驻 */
     藏獒觉醒: {
         name: '藏獒觉醒',
-        desc: '落后时+10%，反手+2',
-        onComeback(player, baseStrength) { return baseStrength * 1.10; },
+        desc: '落后时+12%，反手+3',
+        onComeback(player, baseStrength) { return baseStrength * 1.12; },
         onBeforeCalc(player) {
-            player.stats.backhand += 2;
+            player.stats.backhand += 3;
         }
     },
 
