@@ -259,7 +259,7 @@ const removeDrafted = (p) => {
   freeAgentsForDraft.value.push(p);
 }
 
-const freeAgentsForDraft = ref([...freeAgentsPool])
+const freeAgentsForDraft = ref(freeAgentsPool.map(p => new Player(p.name, { ...p.stats })))
 
 const finishDrafting = () => {
   // 玩家先选完了，剩下的自由球员供人机队伍选择
@@ -705,7 +705,7 @@ const resetGame = () => {
     players: t.players.map(p => new Player(p.name, { ...p.stats }))
   }))
   scoutPoolPlayers.value = []
-  freeAgentsForDraft.value = [...freeAgentsPool]
+  freeAgentsForDraft.value = freeAgentsPool.map(p => new Player(p.name, { ...p.stats }))
   selectedGroup.value = null
   appState.value = 'group_select'
 }
