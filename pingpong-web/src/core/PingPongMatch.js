@@ -312,6 +312,36 @@ export class GameMatch {
         const isClutch = (this.scoreA >= 9 && this.scoreB >= 9) || this.scoreA >= 10 || this.scoreB >= 10;
         const trailingA = this.scoreA < this.scoreB;
 
+        // ── 随机事件（每球3%概率触发）──
+        if (Math.random() < 0.03) {
+            const server = this.turn === 'A' ? this.playerA : this.playerB;
+            const receiver = this.turn === 'A' ? this.playerB : this.playerA;
+            const r = Math.random();
+            if (r < 0.15) { // 15% × 3% = 0.45%
+                this.log(`🎲 [擦网重发] ${server.name} 发球擦网！`);
+            } else if (r < 0.30) {
+                this.log(`🍀 [幸运擦边] ${receiver.name} 擦边球得分！`);
+                this.scorePoint(this.turn === 'A' ? 'B' : 'A');
+                this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
+            } else if (r < 0.50) {
+                this.log(`❌ [发球失误] ${server.name} 发球下网！`);
+                this.scorePoint(this.turn === 'A' ? 'B' : 'A');
+                this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
+            } else if (r < 0.70) {
+                this.log(`💥 [扣杀出界] ${server.name} 扣杀失误！`);
+                this.scorePoint(this.turn === 'A' ? 'B' : 'A');
+                this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
+            } else if (r < 0.85) {
+                this.log(`🛡️ [神级防守] ${receiver.name} 防反得分！`);
+                this.scorePoint(this.turn === 'A' ? 'B' : 'A');
+                this._afterPoint(receiver === this.playerA); this._finishPoint(); return;
+            } else {
+                this.log(`💪 [暴力扣杀] ${server.name} 一板爆冲得分！`);
+                this.scorePoint(this.turn === 'A' ? 'A' : 'B');
+                this._afterPoint(server === this.playerA); this._finishPoint(); return;
+            }
+        }
+
         const mkRole = (side, phase) =>
             (isClutch ? 'clutch_' : '') + (isComeback && ((side === 'A' && trailingA) || (side === 'B' && !trailingA)) ? 'comeback_' : '') + phase;
 
