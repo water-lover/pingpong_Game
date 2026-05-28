@@ -33,7 +33,7 @@ export const starterGroups = [
             // 樊振东小幅削弱(仍最强)
             plainPlayer('樊振东', { serve: 90, receive: 94, forehand: 96, backhand: 96, rally: 98, stamina: 95, mentality: 100, price: 1000 }),
             plainPlayer('波尔', { serve: 93, receive: 95, forehand: 95, backhand: 97, rally: 98, stamina: 88, mentality: 96, price: 800 }),
-            plainPlayer('莫雷高德', { serve: 82, receive: 90, forehand: 92, backhand: 72, rally: 95, stamina: 93, mentality: 72, price: 800 }),
+            plainPlayer('莫雷高德', { serve: 86, receive: 92, forehand: 93, backhand: 80, rally: 96, stamina: 94, mentality: 78, price: 800 }),
         ]
     },
     {
@@ -89,15 +89,15 @@ export const freeAgentsPool = [
 // AI 队伍定义
 export const leagueAICaching = [
     {
-        id: 'team_jp', name: '饭圈队', wins: 0, losses: 0, gold: 1000,
+        id: 'team_jp', name: '饭圈队', wins: 0, losses: 0, gold: 1500,
         players: [
-            corePlayer('王楚钦', { serve: 100, receive: 98, forehand: 93, backhand: 93, rally: 84, stamina: 95, mentality: 95, price: 900 }),
+            corePlayer('王楚钦', { serve: 100, receive: 98, forehand: 94, backhand: 94, rally: 87, stamina: 96, mentality: 96, price: 900 }),
             corePlayer('刘国梁', { serve: 100, receive: 96, forehand: 85, backhand: 85, rally: 75, stamina: 80, mentality: 97, price: 800 }),
             corePlayer('刘丁硕', { serve: 70, receive: 70, forehand: 70, backhand: 70, rally: 80, stamina: 90, mentality: 70, price: 300 }),
         ]
     },
     {
-        id: 'team_eu', name: '黑马队', wins: 0, losses: 0, gold: 1000,
+        id: 'team_eu', name: '黑马队', wins: 0, losses: 0, gold: 1500,
         players: [
             corePlayer('张本智和', { serve: 93, receive: 92, forehand: 90, backhand: 97, rally: 92, stamina: 98, mentality: 97, price: 800 }),
             corePlayer('林昀儒', { serve: 97, receive: 97, forehand: 87, backhand: 99, rally: 87, stamina: 96, mentality: 97, price: 800 }),
@@ -105,7 +105,7 @@ export const leagueAICaching = [
         ]
     },
     {
-        id: 'team_na', name: '新星队', wins: 0, losses: 0, gold: 1000,
+        id: 'team_na', name: '新星队', wins: 0, losses: 0, gold: 1500,
         players: [
             corePlayer('大勒布伦', { serve: 91, receive: 91, forehand: 91, backhand: 91, rally: 91, stamina: 95, mentality: 91, price: 800 }),
             corePlayer('小勒布伦', { serve: 90, receive: 91, forehand: 90, backhand: 95, rally: 92, stamina: 95, mentality: 90, price: 800 }),

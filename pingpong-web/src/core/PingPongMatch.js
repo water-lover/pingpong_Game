@@ -68,6 +68,8 @@ export class Player {
         if (actualGain <= 0) return 0;
         this._baseStats[statName] += actualGain;
         this.stats[statName] = this._baseStats[statName];
+        // 训练后球员身价提升（每点+15金）
+        this.stats.price = (this.stats.price || 50) + actualGain * 15;
         this._baseStats[statName] = this.stats[statName];
         return cost;
     }

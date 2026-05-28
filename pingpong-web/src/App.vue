@@ -60,7 +60,7 @@ const selectGroup = (groupId) => {
     const teamId = g.id === 'group_2' ? 'team_b' : 'team_c'
     let team = leagueTeams.value.find(t => t.id === teamId)
     if (!team) {
-      team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1000, players: [] }
+      team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1500, players: [] }
       leagueTeams.value.push(team)
       teamStats.value[teamId] = { name: teamNames[i], points: 0, wins: 0, losses: 0 }
     }
@@ -69,7 +69,7 @@ const selectGroup = (groupId) => {
   appState.value = 'drafting'
 }
 
-const myTeamGold = ref(1000)
+const myTeamGold = ref(1500)
 const teamStats = ref({
   'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
   'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
@@ -445,12 +445,12 @@ const resetToMenu = () => {
      teamStats.value['team_mine'].wins++
      teamStats.value['team_mine'].points += 3
      teamStats.value[oppId].losses++
-     myTeamGold.value += 800 // 赢球奖金
+     myTeamGold.value += 1500 // 赢球奖金
   } else {
      teamStats.value['team_mine'].losses++
      teamStats.value[oppId].wins++
      teamStats.value[oppId].points += 3
-     myTeamGold.value += 400 // 出场费
+     myTeamGold.value += 800 // 出场费
   }
   
   // 2. 模拟后台所有 AI 交手的比赛（含真实体能消耗）
@@ -482,14 +482,14 @@ const resetToMenu = () => {
              teamStats.value[match.home].wins++;
              teamStats.value[match.home].points += 3;
              teamStats.value[match.away].losses++;
-             if (h) h.gold = (h.gold || 0) + 800;
-             if (a) a.gold = (a.gold || 0) + 400;
+             if (h) h.gold = (h.gold || 0) + 1500;
+             if (a) a.gold = (a.gold || 0) + 800;
            } else {
              teamStats.value[match.away].wins++;
              teamStats.value[match.away].points += 3;
              teamStats.value[match.home].losses++;
-             if (a) a.gold = (a.gold || 0) + 800;
-             if (h) h.gold = (h.gold || 0) + 400;
+             if (a) a.gold = (a.gold || 0) + 1500;
+             if (h) h.gold = (h.gold || 0) + 800;
            }
          }
        }
@@ -502,17 +502,20 @@ const resetToMenu = () => {
     if (t.id !== 'team_mine') {
       t.players.forEach(p => p.roundRecovery());
       // AI赚点小钱
-      t.gold = (t.gold || 1000) + 200;
-      // AI自动训练：每轮至少训练一次核心球员
-      const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
-      if (trainable.length > 0 && t.gold > 150) {
+      t.gold = (t.gold || 1000) + 500;
+      // AI每轮尽量把资金用于训练（与玩家同等培养机会）
+      let attempts = 0;
+      while (attempts < 3 && t.gold > 150) {
+        attempts++;
+        const trainable = t.players.filter(p => p.getTrainCost('serve') < Infinity);
+        if (trainable.length === 0) break;
         const target = trainable.sort((a, b) => b.stats.price - a.stats.price)[0];
         const stats = ['serve','receive','forehand','backhand','rally'];
         const trainStat = stats.sort(() => Math.random() - 0.5)[0];
         const cost = target.getTrainCost(trainStat);
         if (cost <= t.gold) {
           t.gold -= target.trainStat(trainStat);
-        }
+        } else break;
       }
     }
   })
@@ -538,7 +541,7 @@ const resetToMenu = () => {
 /** 重置整个联赛（重新开始） */
 const resetGame = () => {
   myTeamPlayers.value = []
-  myTeamGold.value = 1000
+  myTeamGold.value = 1500
   currentRound.value = 1
   teamStats.value = {
     'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
@@ -553,7 +556,7 @@ const resetGame = () => {
     ...t,
     wins: 0,
     losses: 0,
-    gold: 1000,
+    gold: 1500,
     players: t.players.map(p => new Player(p.name, { ...p.stats }))
   }))
   scoutPoolPlayers.value = []

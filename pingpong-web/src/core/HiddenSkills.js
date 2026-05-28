@@ -24,17 +24,17 @@ export const SKILLS = {
     /** 马龙: 六边形战士 — 全属性保底88，相持阶段+3% */
     六边形战士: {
         name: '六边形战士',
-        desc: '全属性保底90，相持+4',
+        desc: '全属性保底92，相持+6',
         onBeforeCalc(player) {
             const stats = player.stats;
-            stats.serve = Math.max(90, stats.serve);
-            stats.receive = Math.max(90, stats.receive);
-            stats.forehand = Math.max(90, stats.forehand);
-            stats.backhand = Math.max(90, stats.backhand);
-            stats.rally = Math.max(90, stats.rally);
-            player.currentMentality = Math.max(player.stats.mentality * 0.90, player.currentMentality);
+            stats.serve = Math.max(92, stats.serve);
+            stats.receive = Math.max(92, stats.receive);
+            stats.forehand = Math.max(92, stats.forehand);
+            stats.backhand = Math.max(92, stats.backhand);
+            stats.rally = Math.max(92, stats.rally);
+            player.currentMentality = Math.max(player.stats.mentality * 0.92, player.currentMentality);
         },
-        onRally(player, baseStrength) { return baseStrength + 4; }
+        onRally(player, baseStrength) { return baseStrength + 6; }
     },
 
     /** 张继科: 藏獒觉醒 — 落后时爆发+10%，反手+2常驻 */
@@ -150,11 +150,11 @@ export const SKILLS = {
         }
     },
 
-    /** 莫雷高德: 怪球手 — 随机性+10%(对手更难预判) */
+    /** 莫雷高德: 怪球手 — 让对手极不适应，全属性-8% */
     怪球手: {
         name: '怪球手',
-        desc: '增加对手失误率',
-        onConfuse(baseStrength) { return baseStrength * 0.95; }
+        desc: '对手全属性-8%',
+        onConfuse(baseStrength) { return baseStrength * 0.92; }
     },
 
     /** 林诗栋: 快攻 — 正手+2 */
