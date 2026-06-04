@@ -68,7 +68,7 @@ const selectGroup = (groupId) => {
   const leftovers = starterGroups.filter(g => g.id !== groupId)
   const teamNames = ['凌云队', '雷霆队']
   leftovers.forEach((g, i) => {
-    const teamId = g.id === 'group_2' ? 'team_b' : 'team_c'
+    const teamId = i === 0 ? 'team_b' : 'team_c'
     let team = leagueTeams.value.find(t => t.id === teamId)
     if (!team) {
       team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1500, players: [] }
@@ -667,7 +667,7 @@ const resetToMenu = () => {
     if (t.id !== 'team_mine') {
       t.players.forEach(p => { p.roundRecovery(); ; });
       // AI赚钱 + 强制训练：每轮至少把核心球员练满
-      t.gold = (t.gold || 1000) + 800;
+      t.gold = (t.gold || 1000) + 1200;  // AI资金提升
       // AI训练：优先核心球员，有多少钱练多少
       let aiAttempts = 0;
       while (aiAttempts < 8 && t.gold > 80) {
@@ -678,7 +678,7 @@ const resetToMenu = () => {
         for (const p of trainable) {
           const candidates = ['serve','receive','forehand','backhand','rally']
             .filter(s => p.getTrainCost(s) < Infinity && p.getTrainCost(s) <= t.gold)
-            .sort((a, b) => p.getTrainCost(b) - p.getTrainCost(a)); // 优先最贵的
+            .sort((a, b) => p.getTrainCost(a) - p.getTrainCost(b)); // 优先最便宜的
           if (candidates.length === 0) continue;
           t.gold -= p.trainStat(candidates[0]);
           trained = true;

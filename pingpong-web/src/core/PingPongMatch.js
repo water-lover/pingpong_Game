@@ -513,14 +513,28 @@ export class SeriesMatch {
         console.log(message);
     }
 
-    /** AI随机选择战术（排除normal以增加多样性，或包含normal但降低概率） */
+    /** AI智能选择战术，基于球员属性分配最优战术 */
     _assignAiTactic(aiPlayer) {
-        // 随机选一个非normal的战术，或者30%概率用normal
-        if (Math.random() < 0.3) {
-            aiPlayer.currentTactic = 'normal';
-        } else {
+        // 计算每种战术的加权得分，选最适合球员属性的
+        let bestTactic = 'normal';
+        let bestScore = -1;
+        for (const [id, t] of Object.entries(TACTICS)) {
+            const score = (aiPlayer.stats.serve || 50) * t.weights.serve +
+                          (aiPlayer.stats.receive || 50) * t.weights.receive +
+                          (aiPlayer.stats.forehand || 50) * t.weights.forehand +
+                          (aiPlayer.stats.backhand || 50) * t.weights.backhand +
+                          (aiPlayer.stats.rally || 50) * t.weights.rally;
+            if (score > bestScore) {
+                bestScore = score;
+                bestTactic = id;
+            }
+        }
+        // 20%概率随机选一个非normal战术增加不可预测性
+        if (Math.random() < 0.2) {
             const nonNormal = TACTIC_IDS.filter(id => id !== 'normal');
             aiPlayer.currentTactic = nonNormal[Math.floor(Math.random() * nonNormal.length)];
+        } else {
+            aiPlayer.currentTactic = bestTactic;
         }
         this.log(`🤖 [AI战术] ${aiPlayer.name} 选择战术：${TACTICS[aiPlayer.currentTactic].label}`);
     }
