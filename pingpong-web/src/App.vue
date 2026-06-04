@@ -1,11 +1,11 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Player, TeamMatch } from './core/PingPongMatch.js'
-import { freeAgentsPool, starterGroups, fanTeamRoster, getFullPlayerPool, snakeDraftToAITeams } from './data/gameData.js'
+import { freeAgentsPool, fanTeamRoster, getFullPlayerPool, snakeDraftToAITeams } from './data/gameData.js'
 import { SKILLS } from './core/HiddenSkills.js'
 
 const MAX_ROUNDS = 10
-const appState = ref('group_select') // group_select → league → scout → roster → match → champion → playoff_over
+const appState = ref('drafting') // drafting → league → scout → roster → match → champion → playoff_over
 const logs = ref([])
 const showSkillBook = ref(false)
 const showOpponentRoster = ref(false)
@@ -62,91 +62,43 @@ const leagueTeams = ref([])
 const currentRound = ref(1)
 
 // 3大分组选择
-const selectedGroup = ref(null)
 
-const draftablePool = ref([])
+// 初始预算在下面定义
 
-/** 初始化饭圈队 */
-const initFanTeam = () => {
-  const team = { id: 'team_jp', name: '饭圈队', wins: 0, losses: 0, gold: 1500, players: [] };
+/** 初始化游戏：填充选秀池+饭圈队+AI空队 */
+const initGame = () => {
+  // 初始化饭圈队
+  const fanTeam = { id: 'team_jp', name: '饭圈队', wins: 0, losses: 0, gold: 1500, players: [] };
   fanTeamRoster.forEach(p => {
     const np = new Player(p.name, {...p.stats});
-    team.players.push(np);
+    fanTeam.players.push(np);
   });
   const existing = leagueTeams.value.find(t => t.id === 'team_jp');
   if (existing) {
-    existing.players = team.players;
+    existing.players = fanTeam.players;
   } else {
-    leagueTeams.value.push(team);
+    leagueTeams.value.push(fanTeam);
   }
-};
 
-/** 选组后进入选秀 */
-const selectGroup = (groupId) => {
-  selectedGroup.value = groupId;
-  initFanTeam();
+  // 初始化4个空AI队伍
+  ['team_eu', 'team_na', 'team_b', 'team_c'].forEach((id, i) => {
+    const names = ['黑马队', '新星队', '凌云队', '雷霆队'];
+    if (!leagueTeams.value.find(t => t.id === id)) {
+      leagueTeams.value.push({ id, name: names[i], wins: 0, losses: 0, gold: 1500, players: [] });
+      teamStats.value[id] = { name: names[i], points: 0, wins: 0, losses: 0 };
+    }
+  });
+
+  // 填充选秀池（排除饭圈队）
   const fanNames = fanTeamRoster.map(p => p.name);
   const fullPool = getFullPlayerPool();
   draftablePool.value = fullPool.filter(p => !fanNames.includes(p.name));
-  
-  const chosen = starterGroups.find(g => g.id === groupId);
-  myTeamPlayers.value = chosen.players.map(p => {
-    const np = new Player(p.name, {...p.stats});
-    draftablePool.value = draftablePool.value.filter(dp => dp.name !== np.name);
-    return np;
-  });
-  
-  const starNames = ['樊振东', '马龙', '张继科'];
-  const pickedStar = myTeamPlayers.value.find(p => starNames.includes(p.name));
-  if (pickedStar) {
-    draftablePool.value = draftablePool.value.filter(p => !starNames.includes(p.name) || p.name === pickedStar.name);
-  }
-  
-  const leftovers = starterGroups.filter(g => g.id !== groupId);
-  const teamNames = ['凌云队', '雷霆队'];
-  leftovers.forEach((g, i) => {
-    const teamId = i === 0 ? 'team_b' : 'team_c';
-    let team = leagueTeams.value.find(t => t.id === teamId);
-    if (!team) {
-      team = { id: teamId, name: teamNames[i], wins: 0, losses: 0, gold: 1500, players: [] };
-      leagueTeams.value.push(team);
-      teamStats.value[teamId] = { name: teamNames[i], points: 0, wins: 0, losses: 0 };
-    }
-    team.players = g.players.map(p => {
-      const np = new Player(p.name, {...p.stats});
-      draftablePool.value = draftablePool.value.filter(dp => dp.name !== np.name);
-      return np;
-    });
-  });
-  
   draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
-  appState.value = 'drafting';
 };
+const draftablePool = ref([])
+initGame();
 
-/** 蛇形分配剩余球员给AI队伍 */
-const finishDraftAndDistribute = () => {
-  const remaining = [...draftablePool.value];
-  const aiTeamIds = ['team_eu', 'team_na', 'team_b', 'team_c'];
-  const aiTeamNames = ['黑马队', '新星队', '凌云队', '雷霆队'];
-  aiTeamIds.forEach((id, i) => {
-    if (!leagueTeams.value.find(t => t.id === id)) {
-      const team = { id, name: aiTeamNames[i], wins: 0, losses: 0, gold: 1500, players: [] };
-      leagueTeams.value.push(team);
-      teamStats.value[id] = { name: aiTeamNames[i], points: 0, wins: 0, losses: 0 };
-    }
-  });
-  const distributed = snakeDraftToAITeams(remaining, aiTeamIds);
-  aiTeamIds.forEach(id => {
-    const team = leagueTeams.value.find(t => t.id === id);
-    if (team) distributed[id].forEach(p => team.players.push(p));
-  });
-  const allDistributed = [];
-  aiTeamIds.forEach(id => allDistributed.push(...distributed[id]));
-  scoutPoolPlayers.value = remaining.filter(p => !allDistributed.includes(p));
-  appState.value = 'league';
-  saveGame();
-}
-const myTeamGold = ref(1500)
+const myTeamGold = ref(3700)
 const teamStats = ref({
   'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
   'team_jp':   { name: '饭圈队', points: 0, wins: 0, losses: 0 },
@@ -333,9 +285,10 @@ const draftPlayer = (p) => {
   }
   if (myTeamPlayers.value.includes(p)) return;
   if (myTeamGold.value < p.stats.price) {
-    alert('资金不足！需要 ' + p.stats.price + ' 金币');
+    alert('资金不足！需要 ' + p.stats.price + ' 金币（剩余 ' + myTeamGold.value + '）');
     return;
   }
+  // 约束：只能选1个1000级超巨
   const starNames = ['樊振东', '马龙', '张继科'];
   if (starNames.includes(p.name)) {
     const hasStar = myTeamPlayers.value.find(mp => starNames.includes(mp.name));
@@ -360,7 +313,7 @@ const finishDrafting = () => {
   finishDraftAndDistribute();
 }
 
-const getNextOpponentIdconst getNextOpponentId = () => {
+const getNextOpponentId = () => {
   const roundIdx = (currentRound.value - 1) % schedule.length
   const thisRound = schedule[roundIdx]
   if (!thisRound || !Array.isArray(thisRound)) return 'team_jp'
@@ -808,7 +761,7 @@ const resetGame = () => {
   championsHistory.value = [];
   seasonMVP.value = null;
   myTeamPlayers.value = []
-  myTeamGold.value = 1500
+  myTeamGold.value = 3700
   currentRound.value = 1
   teamStats.value = {
     'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
@@ -818,13 +771,12 @@ const resetGame = () => {
     'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
     'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
   }
-  // 重置AI队伍（保留饭圈队，清除其他队伍）
+  // 重置AI队伍（只保留饭圈队）
   leagueTeams.value = leagueTeams.value.filter(t => t.id === 'team_jp');
-  initFanTeam();
+  initGame();
   scoutPoolPlayers.value = []
   draftablePool.value = []
-  selectedGroup.value = null
-  appState.value = 'group_select'
+  appState.value = 'drafting'
 }
 </script>
 
@@ -833,29 +785,15 @@ const resetGame = () => {
     <h1>乒乓球经理 - 模拟经营</h1>
 
     <!-- ================= 三大分组选择 ================= -->
+        <!-- ================= 球员选秀 ================= -->
     <div v-if="appState === 'group_select'" class="drafting-view">
-      <h3>【选择你的建队基石】</h3>
-      <p class="desc">请从下面三组中挑选一组作为你的初始阵容，其余两组将成为联赛对手</p>
-      <div style="display:flex;flex-wrap:wrap;gap:20px;justify-content:center;">
-        <div v-for="g in starterGroups" :key="g.id" class="player-card selectable"
-             :class="{'selected': selectedGroup === g.id}"
-             @click="selectGroup(g.id)" style="width:260px;cursor:pointer;">
-          <h4 style="color:#e74c3c;font-size:20px;">{{ g.name }}</h4>
-          <div v-for="p in g.players" :key="p.name" style="margin:8px 0;padding:8px;background:#f9f9f9;border-radius:6px;">
-            <strong>{{ p.name }}</strong> ({{ p.stats.price }}金)
-            <div style="font-size:12px;color:#666;">
-              发{{ p.stats.serve }} 接{{ p.stats.receive }} 正{{ p.stats.forehand }} 反{{ p.stats.backhand }} 相{{ p.stats.rally }}
-            </div>
-          </div>
-        </div>
-      </div>
+      <h3>🎯 正在组建球队...</h3>
+      <p class="desc">正在加载球员市场...</p>
     </div>
-
-    <!-- ================= 选秀阶段：玩家先选人 ================= -->
-    <div v-if="appState === 'drafting'" class="drafting-view">
-      <h3>【选秀签约 - 请你先选人】</h3>
-      <p class="desc">你的初始阵容已就绪，当前资金 <strong>{{ myTeamGold }}</strong> 金币</p>
-      <p class="desc" style="font-size:14px;">从大池中再选 <strong>{{ 5 - myTeamPlayers.length }}</strong> 人（上限 {{ MAX_TEAM_SIZE }} 人），注意1000级超巨只能拥有1位！确认后剩余球员蛇形分配给AI球队</p>
+<div v-if="appState === 'drafting'" class="drafting-view">
+      <h3>【组建你的球队 - 自由选人】</h3>
+      <p class="desc">从大池中挑选 <strong>5</strong> 名球员，预算 <strong style="color:#e74c3c;">{{ myTeamGold + myTeamPlayers.reduce((s,p) => s + p.stats.price, 0) }}</strong> 金币（剩余 <strong>{{ myTeamGold }}</strong>）</p>
+      <p class="desc" style="font-size:14px;">点击球员签约（上限 {{ MAX_TEAM_SIZE }} 人），注意1000级超巨(樊振东/马龙/张继科)只能选1位！确认后剩余球员蛇形分配给AI球队</p>
       
       <div style="display:flex;flex-wrap:wrap;gap:15px;justify-content:center;margin:15px 0;">
         <div class="player-card" v-for="p in draftablePool" :key="p.name" style="border:2px solid #f39c12;cursor:pointer;" @click="draftPlayer(p)">
@@ -870,7 +808,7 @@ const resetGame = () => {
       </div>
 
       <div style="margin:15px 0;">
-        <h4>我的球队 ({{ myTeamPlayers.length }}/{{ MAX_TEAM_SIZE }}) 总身价: <span style="color:#e74c3c;">{{ myTeamPlayers.reduce((s,p) => s + p.stats.price, 0) }}</span> 金币</h4>
+        <h4>我的球队 ({{ myTeamPlayers.length }}/{{ MAX_TEAM_SIZE }}) 总身价: <span style="color:#e74c3c;">{{ myTeamPlayers.reduce((s,p) => s + p.stats.price, 0) }}</span> / 3700 金币</h4>
         <div class="draft-pool">
           <div class="player-card" v-for="p in myTeamPlayers" :key="p.name" style="border:2px solid #2ecc71;">
             <h4>{{ p.name }}</h4>
