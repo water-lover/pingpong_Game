@@ -1,0 +1,9 @@
+# CodeGraph AI index database (local generated cache)
+.codegraph/
+
+# Reasonix runtime logs
+.reasonix/*.log
+
+# OS files
+.DS_Store
+Thumbs.db
