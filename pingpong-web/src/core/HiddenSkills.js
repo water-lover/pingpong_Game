@@ -9,7 +9,7 @@ export const SKILLS = {
     /** 樊振东: 王者之心 — 常驻全属性+5%，关键分额外+8%，决胜局额外+5% */
     王者之心: {
         name: '王者之心',
-        desc: '常驻全属性+4%，关键分再+6%',
+        desc: '常驻全属性+6%，关键分再+6%',
         onBeforeCalc(player) {
             player.stats.serve += 6;
             player.stats.receive += 6;
@@ -292,6 +292,16 @@ export const SKILLS = {
         }
     },
 
+    /** 骰子妈: 护犊子 — 心态+8，落后时爆发+8% */
+    护犊子: {
+        name: '护犊子',
+        desc: '心态+8，落后时+8%',
+        onBeforeCalc(player) {
+            player.currentMentality = Math.min(100, player.currentMentality + 8);
+        },
+        onComeback(player, baseStrength) { return baseStrength * 1.08; }
+    },
+
     /** 瓦尔德内尔: 游击队长 — 每局随机切换战术，战术效果+8% */
     游击队长: {
         name: '游击队长',
@@ -335,6 +345,7 @@ export function getPlayerSkills(playerName) {
         '阿鲁纳': ['非洲雄狮'],
         '哈基阔': ['发球怪'],
         '哈基羊': ['气氛组'],
+        '骰子妈': ['护犊子'],
     };
     return skillMap[playerName] || [];
 }
