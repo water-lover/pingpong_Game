@@ -61,9 +61,24 @@ const myTeamPlayers = ref([])
 const leagueTeams = ref([])
 const currentRound = ref(1)
 
-// 3大分组选择
+/** 蛇形选秀状态 */
+const snakeDraftOrder = ref([]) // 选秀顺序(25个teamId)
+const currentPickIndex = ref(0)  // 当前选到第几轮
+const draftLog = ref([])        // 选秀记录
 
-// 初始预算在下面定义
+/** 生成蛇形选秀顺序 */
+const generateSnakeDraftOrder = () => {
+  const teamIds = ['team_mine', 'team_eu', 'team_na', 'team_b', 'team_c'];
+  const order = [];
+  for (let round = 0; round < 5; round++) {
+    const isReverse = round % 2 === 1;
+    for (let i = 0; i < 5; i++) {
+      const idx = isReverse ? 4 - i : i;
+      order.push(teamIds[idx]);
+    }
+  }
+  return order;
+};
 
 /** 初始化游戏：填充选秀池+饭圈队+AI空队 */
 const initGame = () => {
@@ -94,6 +109,10 @@ const initGame = () => {
   const fullPool = getFullPlayerPool();
   draftablePool.value = fullPool.filter(p => !fanNames.includes(p.name));
   draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
+  // 生成蛇形选秀顺序
+  snakeDraftOrder.value = generateSnakeDraftOrder();
+  currentPickIndex.value = 0;
+  draftLog.value = [];
 };
 const draftablePool = ref([])
 const myTeamGold = ref(3700)
@@ -276,19 +295,71 @@ const enemyTeam = ref(null)
 const scoutPoolPlayers = ref([])
 
 // 选秀界面：玩家从自由市场招募
-const MAX_TEAM_SIZE = 5;
+const MAX_TEAM_SIZE = 6;
+
+/** 当前轮到谁选秀 */
+const currentDraftTeam = computed(() => {
+  if (currentPickIndex.value >= snakeDraftOrder.value.length) return null;
+  return snakeDraftOrder.value[currentPickIndex.value];
+});
+
+/** 获取队伍显示名 */
+const getTeamName = (teamId) => {
+  if (teamId === 'team_mine') return '你（本质队）';
+  const t = leagueTeams.value.find(t => t.id === teamId);
+  return t ? t.name : teamId;
+};
+
+/** AI自动选人：选池里价格最高的可用球员 */
+const aiPick = (teamId) => {
+  const team = leagueTeams.value.find(t => t.id === teamId);
+  if (!team || team.players.length >= MAX_TEAM_SIZE) return false;
+  draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
+  const pick = draftablePool.value[0];
+  if (!pick) return false;
+  team.players.push(pick);
+  draftablePool.value = draftablePool.value.filter(p => p !== pick);
+  draftLog.value.push(team.name + ' 选中了 ' + pick.name + '（' + pick.stats.price + '金）');
+  // 勒布伦兄弟绑定：选了其中一个，另一个自动跟进
+  if (pick.name.includes('勒布伦')) {
+    const brother = draftablePool.value.find(p => p.name.includes('勒布伦') && p.name !== pick.name);
+    if (brother && team.players.length < MAX_TEAM_SIZE) {
+      team.players.push(brother);
+      draftablePool.value = draftablePool.value.filter(p => p !== brother);
+      draftLog.value.push('🔄 ' + team.name + ' 自动获得 ' + brother.name + '(勒布伦兄弟绑定)');
+    }
+  }
+  currentPickIndex.value++;
+  return true;
+};
+
+/** 处理AI自动选秀，直到轮到玩家或选秀结束 */
+const processAiPicks = () => {
+  let maxLoops = 30; // 安全阀
+  while (maxLoops-- > 0) {
+    const currentTeamId = snakeDraftOrder.value[currentPickIndex.value];
+    if (!currentTeamId) break; // 选秀结束
+    if (currentTeamId === 'team_mine') break; // 轮到玩家了
+    aiPick(currentTeamId);
+  }
+  // 选秀结束检查
+  if (currentPickIndex.value >= snakeDraftOrder.value.length) {
+    finishDraftAndDistribute();
+  }
+};
 
 const draftPlayer = (p) => {
+  // 检查是否轮到玩家
+  if (currentDraftTeam.value !== 'team_mine') {
+    alert('现在轮到 ' + getTeamName(currentDraftTeam.value) + ' 选人，请稍候...');
+    return;
+  }
   if (myTeamPlayers.value.length >= MAX_TEAM_SIZE) {
     alert('球队已满 ' + MAX_TEAM_SIZE + ' 人！');
     return;
   }
   if (myTeamPlayers.value.includes(p)) return;
-  if (myTeamGold.value < p.stats.price) {
-    alert('资金不足！需要 ' + p.stats.price + ' 金币（剩余 ' + myTeamGold.value + '）');
-    return;
-  }
-  // 约束：只能选1个1000级超巨
+  // 1000级超巨限1个
   const starNames = ['樊振东', '马龙', '张继科'];
   if (starNames.includes(p.name)) {
     const hasStar = myTeamPlayers.value.find(mp => starNames.includes(mp.name));
@@ -297,49 +368,39 @@ const draftPlayer = (p) => {
       return;
     }
   }
-  myTeamGold.value -= p.stats.price;
   myTeamPlayers.value.push(p);
   draftablePool.value = draftablePool.value.filter(dp => dp !== p);
+  draftLog.value.push('你（本质队）选中了 ' + p.name + '（' + p.stats.price + '金）');
+  // 勒布伦兄弟绑定
+  if (p.name.includes('勒布伦')) {
+    const brother = draftablePool.value.find(b => b.name.includes('勒布伦') && b.name !== p.name);
+    if (brother) {
+      myTeamPlayers.value.push(brother);
+      draftablePool.value = draftablePool.value.filter(b => b !== brother);
+      draftLog.value.push('🔄 你（本质队）自动获得 ' + brother.name + '(勒布伦兄弟绑定)');
+    }
+  }
+  currentPickIndex.value++;
+  // 自动处理AI选秀
+  processAiPicks();
 };
 
 const removeDrafted = (p) => {
-  myTeamGold.value += p.stats.price;
-  myTeamPlayers.value = myTeamPlayers.value.filter(mp => mp !== p);
-  draftablePool.value.push(p);
-  draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
+  // 蛇形选秀中不能退款取消（已选的AI球队无法退还）
+  alert('蛇形选秀已完成的选秀不能撤销！');
 };
 
 
-/** 蛇形分配剩余球员给AI队伍 */
+/** 完成选秀：剩余球员放入自由市场 */
 const finishDraftAndDistribute = () => {
-  const remaining = [...draftablePool.value];
-  const aiTeamIds = ['team_eu', 'team_na', 'team_b', 'team_c'];
-  // 确保勒布伦兄弟在同一队
-  const lebronBrothers = remaining.filter(p => p.name.includes('勒布伦'));
-  if (lebronBrothers.length === 2) {
-    remaining.splice(remaining.indexOf(lebronBrothers[1]), 1);
-  }
-  const distributed = snakeDraftToAITeams(remaining, aiTeamIds);
-  // 如果勒布伦兄弟存在，把弟弟加到哥哥的队伍
-  if (lebronBrothers.length === 2) {
-    for (const id of aiTeamIds) {
-      if (distributed[id].find(p => p.name === lebronBrothers[0].name)) {
-        distributed[id].push(lebronBrothers[1]);
-        break;
-      }
-    }
-  }
-  aiTeamIds.forEach(id => {
-    const team = leagueTeams.value.find(t => t.id === id);
-    if (team) distributed[id].forEach(p => team.players.push(p));
-  });
-  const allDistributed = [];
-  aiTeamIds.forEach(id => allDistributed.push(...distributed[id]));
-  scoutPoolPlayers.value = remaining.filter(p => !allDistributed.includes(p));
+  // 剩余球员放入自由市场
+  scoutPoolPlayers.value = [...draftablePool.value];
+  draftablePool.value = [];
   appState.value = 'league';
   saveGame();
 }
 
+/** 旧的蛇形分配(已废弃) - 保留兼容 */
 const finishDrafting = () => {
   finishDraftAndDistribute();
 }
@@ -820,9 +881,14 @@ const resetGame = () => {
       <p class="desc">正在加载球员市场...</p>
     </div>
 <div v-if="appState === 'drafting'" class="drafting-view">
-      <h3>【组建你的球队 - 自由选人】</h3>
-      <p class="desc">从大池中挑选 <strong>5</strong> 名球员，预算 <strong style="color:#e74c3c;">{{ myTeamGold + myTeamPlayers.reduce((s,p) => s + p.stats.price, 0) }}</strong> 金币（剩余 <strong>{{ myTeamGold }}</strong>）</p>
-      <p class="desc" style="font-size:14px;">点击球员签约（上限 {{ MAX_TEAM_SIZE }} 人），注意1000级超巨(樊振东/马龙/张继科)只能选1位！确认后剩余球员蛇形分配给AI球队</p>
+      <h3>🏀 蛇形选秀 · 你是状元签！</h3>
+      <p class="desc">选秀顺序：你→黑马队→新星队→凌云队→雷霆队（反向蛇形）</p>
+      <p class="desc" style="font-size:14px;margin-bottom:5px;">
+        <strong>当前选秀轮次：第 {{ Math.floor(currentPickIndex/5) + 1 }} / 5 轮</strong>
+        <span v-if="currentDraftTeam === 'team_mine'" style="color:#27ae60;margin-left:15px;">🟢 轮到你了！</span>
+        <span v-else style="color:#e67e22;margin-left:15px;">⏳ {{ getTeamName(currentDraftTeam) }} 正在选人...</span>
+      </p>
+      <p class="desc" style="font-size:13px;color:#888;">点击想选的球员（上限 {{ MAX_TEAM_SIZE }} 人），选完后AI自动递进</p>
       
       <div style="display:flex;flex-wrap:wrap;gap:15px;justify-content:center;margin:15px 0;">
         <div class="player-card" v-for="p in draftablePool" :key="p.name" style="border:2px solid #f39c12;cursor:pointer;" @click="draftPlayer(p)">
@@ -836,6 +902,20 @@ const resetGame = () => {
         </div>
       </div>
 
+      <!-- AI球队当前阵容 -->
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px;justify-content:center;">
+        <div v-for="tid in ['team_mine','team_eu','team_na','team_b','team_c']" :key="tid" 
+             style="border:2px solid #ddd;border-radius:8px;padding:8px 14px;font-size:13px;min-width:120px;"
+             :style="tid === 'team_mine' ? 'border-color:#2ecc71;background:#eafaf1;' : ''">
+          <div style="font-weight:bold;">{{ tid === 'team_mine' ? '你(本质队)' : getTeamName(tid) }}</div>
+          <div>{{ leagueTeams.find(t=>t.id===tid)?.players?.length || 0 }}/5人</div>
+          <div>💰 {{ leagueTeams.find(t=>t.id===tid)?.players?.reduce((s,p) => s + p.stats.price, 0) || 0 }}</div>
+          <div style="font-size:11px;color:#666;">
+            {{ leagueTeams.find(t=>t.id===tid)?.players?.map(p => p.name).join(', ') || '空' }}
+          </div>
+        </div>
+      </div>
+
       <div style="margin:15px 0;">
         <h4>我的球队 ({{ myTeamPlayers.length }}/{{ MAX_TEAM_SIZE }}) 总身价: <span style="color:#e74c3c;">{{ myTeamPlayers.reduce((s,p) => s + p.stats.price, 0) }}</span> / 3700 金币</h4>
         <div class="draft-pool">
@@ -844,13 +924,18 @@ const resetGame = () => {
             <ul class="stats" style="font-size:13px;">
               <li>发{{ p.stats.serve }} 接{{ p.stats.receive }} 正{{ p.stats.forehand }} 反{{ p.stats.backhand }} 相{{ p.stats.rally }}</li>
             </ul>
-            <button class="btn-danger mt" @click="removeDrafted(p)" style="width:100%;">退款取消 (💰+{{ p.stats.price }})</button>
+            <span style="color:#27ae60;font-size:12px;">🎯 第{{ Math.floor((snakeDraftOrder.indexOf('team_mine') < currentPickIndex ? snakeDraftOrder.lastIndexOf('team_mine') : snakeDraftOrder.indexOf('team_mine')) / 5) + 1 }}轮选中</span>
           </div>
         </div>
       </div>
 
-      <div class="action-bar mt">
-        <button class="btn-primary huge" @click="finishDrafting">确认，进入联赛！</button>
+      <!-- 选秀日志 -->
+      <div class="draft-log" style="margin:15px auto;max-width:600px;">
+        <h4 style="margin-bottom:8px;">📋 选秀记录</h4>
+        <div style="max-height:120px;overflow-y:auto;background:#f5f5f5;padding:8px 12px;border-radius:6px;font-size:13px;">
+          <div v-for="(log, i) in draftLog" :key="i" style="padding:2px 0;">{{ log }}</div>
+          <div v-if="draftLog.length === 0" style="color:#999;">等待选秀开始...</div>
+        </div>
       </div>
     </div>
 
