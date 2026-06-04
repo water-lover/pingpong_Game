@@ -265,8 +265,8 @@ const recordPlayoffResult = (homeWon) => {
     playoffBracket.value.final.awayScore = awayScore
     playoffState.value = 'over'
     // 记录冠军到名人堂
-    const winnerName = bracket.final.winner?.name || '未知'
-    const mvpName = bracket.final.winner?.players?.[0]?.name || seasonMVP.value?.name || ''
+    const winnerName = playoffBracket.value.final.winner?.name || '未知'
+    const mvpName = playoffBracket.value.final.winner?.name || seasonMVP.value?.name || ''
     championsHistory.value.push({ season: seasonCount.value, champion: winnerName, mvp: mvpName })
     // 根据排名给MVP
     const allPlayers = [...myTeamPlayers.value]
@@ -637,6 +637,7 @@ const resetToMenu = () => {
       const playerInFinal = bracket.final.home.name === '本质队' || bracket.final.away.name === '本质队'
       if (playerInFinal) {
         startPlayoffMatch(true)
+        return // 防止被下面的 appState='playoff' 覆盖
       }
     }
     appState.value = 'playoff'
@@ -999,9 +1000,20 @@ const resetGame = () => {
         <div v-else class="congrats-text">
           💪 下赛季再来，季后赛冠军终将属于你！
         </div>
-        <div class="action-bar mt">
-          <button class="btn-primary huge" @click="resetGame">🔄 开始新赛季</button>
+        <div class="action-bar mt" style="gap:15px;">
+          <button class="btn-primary huge" @click="continueNextSeason" style="background:#27ae60;">➡️ 进入第{{ seasonCount + 1 }}赛季</button>
+          <button class="btn-secondary huge" @click="resetGame">🔄 重新开始</button>
         </div>
+      </div>
+    </div>
+
+    <!-- ================= 名人堂 ================= -->
+    <div v-if="championsHistory.length > 0" class="hall-of-fame" style="margin-top:30px;padding:20px;background:#1a1a2e;border-radius:12px;color:gold;max-width:600px;margin-left:auto;margin-right:auto;">
+      <h3 style="color:#f1c40f;margin-bottom:15px;">🏛️ 冠军名人堂</h3>
+      <div v-for="(entry, i) in [...championsHistory].reverse()" :key="i" style="display:flex;justify-content:space-between;padding:6px 12px;border-bottom:1px solid #333;">
+        <span>第{{ entry.season }}赛季</span>
+        <span style="font-weight:bold;">{{ entry.champion }}</span>
+        <span>{{ entry.mvp }} 🌟</span>
       </div>
     </div>
 
