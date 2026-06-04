@@ -716,7 +716,7 @@ const resetToMenu = () => {
       let aiAttempts = 0;
       while (aiAttempts < 8 && t.gold > 80) {
         aiAttempts++;
-        const trainable = [...t.players].filter(p => p.isCore).sort((a, b) => (b.stats.price || 0) - (a.stats.price || 0));
+        const trainable = [...t.players].sort((a, b) => (b.stats.price || 0) - (a.stats.price || 0));
         if (trainable.length === 0) break;
         let trained = false;
         for (const p of trainable) {
