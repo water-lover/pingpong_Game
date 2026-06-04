@@ -4,13 +4,16 @@ import { Player, TeamMatch } from './core/PingPongMatch.js'
 import { freeAgentsPool, leagueAICaching, starterGroups } from './data/gameData.js'
 import { SKILLS } from './core/HiddenSkills.js'
 
-const MAX_ROUNDS = 15
-const appState = ref('group_select') // group_select → drafting → league → scout → roster → match → champion
+const MAX_ROUNDS = 10
+const appState = ref('group_select') // group_select → league → scout → roster → match → champion → playoff_over
 const logs = ref([])
 const showSkillBook = ref(false)
 const showOpponentRoster = ref(false)
 const showTraining = ref(false)
 const showTacticGuide = ref(false)
+const seasonCount = ref(1)
+const championsHistory = ref([])
+const seasonMVP = ref(null)
 
 // 战术克制关系
 const tacticCounters = {
@@ -77,9 +80,51 @@ const selectGroup = (groupId) => {
     }
     team.players = g.players.map(p => { const np = new Player(p.name, {...p.stats}); np.isCore = true; return np })
   })
-  appState.value = 'drafting'
+  // 自动分配2名替补球员（保证5人阵容）
+  const benchMap = {
+    'group_1': ['许昕', '弗朗西斯卡'],
+    'group_2': ['林高远', '方博'],
+    'group_3': ['松岛辉空', '方博']
+  };
+  const benchNames = benchMap[groupId] || [];
+  const allFree = [...freeAgentsPool, ...freeAgentsForDraft.value];
+  benchNames.forEach(name => {
+    const src = allFree.find(p => p.name === name);
+    if (src && !myTeamPlayers.value.find(p => p.name === name)) {
+      const bp = new Player(src.name, {...src.stats});
+      myTeamPlayers.value.push(bp);
+      myTeamGold.value -= bp.stats.price;
+      freeAgentsForDraft.value = freeAgentsForDraft.value.filter(fa => fa.name !== name);
+    }
+  });
+  // 自动完成选秀（剩余球员分给AI）
+  autoFinishDraft();
+  appState.value = 'league'
 }
 
+/** 自动分配剩余自由球员给AI队伍 */
+const autoFinishDraft = () => {
+  let remaining = [...freeAgentsForDraft.value];
+  leagueTeams.value.forEach(team => {
+    if (team.id !== 'team_mine') {
+      while (team.players.length < 5 && remaining.length > 0) {
+        let affordable = remaining.filter(p => p.stats.price <= team.gold);
+        if (affordable.length === 0) break;
+        affordable.forEach(p => {
+          const score = p.stats.serve+p.stats.receive+p.stats.forehand+p.stats.backhand+p.stats.rally+p.stats.stamina*1.5;
+          p._aiScore = score * (0.8 + Math.random() * 0.4);
+        });
+        affordable.sort((a, b) => b._aiScore - a._aiScore);
+        const picked = affordable[0];
+        team.gold -= picked.stats.price;
+        team.players.push(picked);
+        remaining = remaining.filter(p => p !== picked);
+      }
+    }
+  });
+  scoutPoolPlayers.value = remaining;
+  saveGame();
+}
 const myTeamGold = ref(1500)
 const teamStats = ref({
   'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
@@ -90,12 +135,12 @@ const teamStats = ref({
   'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
 })
 
-// 6队循环赛：每队与其他5队交手3次 = 15轮
+// 6队循环赛：每队与其他5队交手2次 = 10轮
 
-// 6队循环赛：每队与其他5队交手3次 = 15轮
+// 6队循环赛：每队与其他5队交手2次 = 10轮
 const schedule = []
 const teamIds = ['team_mine', 'team_jp', 'team_eu', 'team_na', 'team_b', 'team_c']
-for (let cycle = 0; cycle < 3; cycle++) {
+for (let cycle = 0; cycle < 2; cycle++) {
   for (let r = 0; r < 5; r++) {
     const round = []
     for (let m = 0; m < 3; m++) {
@@ -219,6 +264,16 @@ const recordPlayoffResult = (homeWon) => {
     playoffBracket.value.final.homeScore = homeScore
     playoffBracket.value.final.awayScore = awayScore
     playoffState.value = 'over'
+    // 记录冠军到名人堂
+    const winnerName = bracket.final.winner?.name || '未知'
+    const mvpName = bracket.final.winner?.players?.[0]?.name || seasonMVP.value?.name || ''
+    championsHistory.value.push({ season: seasonCount.value, champion: winnerName, mvp: mvpName })
+    // 根据排名给MVP
+    const allPlayers = [...myTeamPlayers.value]
+    if (allPlayers.length > 0) {
+      const mvp = allPlayers.sort((a,b) => (b.stats.serve+b.stats.receive+b.stats.forehand+b.stats.backhand+b.stats.rally) - (a.stats.serve+a.stats.receive+a.stats.forehand+a.stats.backhand+a.stats.rally))[0]
+      seasonMVP.value = mvp
+    }
   }
   // 检查是否所有半决赛结束
   const bracket = playoffBracket.value
@@ -694,6 +749,7 @@ const resetToMenu = () => {
 
   // 检查联赛是否结束
   if (currentRound.value > MAX_ROUNDS) {
+    // 记录常规赛冠军
     appState.value = 'champion'
   } else {
     appState.value = 'league'
@@ -708,7 +764,42 @@ const resetToMenu = () => {
 }
 
 /** 重置整个联赛（重新开始） */
+const continueNextSeason = () => {
+  currentRound.value = 1;
+  seasonCount.value++;
+  // 重置成绩表
+  Object.keys(teamStats.value).forEach(k => {
+    teamStats.value[k].points = 0;
+    teamStats.value[k].wins = 0;
+    teamStats.value[k].losses = 0;
+  });
+  // AI队伍保留训练成果和资金
+  leagueTeams.value.forEach(t => {
+    if (t.id !== 'team_mine') {
+      t.gold = (t.gold || 1500) + 2000; // 赛季间补助
+      t.players.forEach(p => {
+        p.currentStamina = p.stats.stamina;
+        p.morale = 75;
+      });
+    }
+  });
+  myTeamPlayers.value.forEach(p => {
+    p.currentStamina = p.stats.stamina;
+    p.morale = 75;
+  });
+  myTeamGold.value += 2000; // 赛季间赞助
+  // 重置离子赛状态
+  playoffState.value = 'idle';
+  playoffBracket.value = null;
+  playoffCurrentMatch.value = null;
+  appState.value = 'league';
+  saveGame();
+}
+
 const resetGame = () => {
+  seasonCount.value = 1;
+  championsHistory.value = [];
+  seasonMVP.value = null;
   myTeamPlayers.value = []
   myTeamGold.value = 1500
   currentRound.value = 1
@@ -829,9 +920,12 @@ const resetGame = () => {
         </table>
       </div>
 
+      <div class="season-info" style="text-align:center;font-size:18px;margin:10px 0;">
+        第 <strong>{{ seasonCount }}</strong> 赛季 · 常规赛
+      </div>
       <div class="action-bar mt">
         <button class="btn-primary huge" @click="startPlayoffs" style="background:#8e44ad;margin-right:15px;">🏆 进入季后赛</button>
-        <button class="btn-secondary huge" @click="resetGame">🔄 开始新赛季</button>
+        <button class="btn-secondary huge" @click="resetGame">🔄 重新开始</button>
       </div>
     </div>
 
@@ -892,6 +986,9 @@ const resetGame = () => {
 
       <!-- 季后赛冠军 -->
       <div v-if="playoffState === 'over'" class="playoff-champion-banner">
+        <div v-if="seasonMVP" style="margin:10px 0;font-size:16px;color:#f39c12;">
+          🌟 赛季MVP: <strong>{{ seasonMVP.name }}</strong>
+        </div>
         <div class="trophy-big">🏆</div>
         <h1 class="playoff-champion-name">{{ playoffBracket?.final?.winner?.name }}</h1>
         <p class="playoff-champion-title">季后赛总冠军</p>

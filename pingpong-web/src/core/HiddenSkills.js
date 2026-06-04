@@ -11,11 +11,11 @@ export const SKILLS = {
         name: '王者之心',
         desc: '常驻全属性+4%，关键分再+6%',
         onBeforeCalc(player) {
-            player.stats.serve += 4;
-            player.stats.receive += 4;
-            player.stats.forehand += 4;
-            player.stats.backhand += 4;
-            player.stats.rally += 4;
+            player.stats.serve += 6;
+            player.stats.receive += 6;
+            player.stats.forehand += 6;
+            player.stats.backhand += 6;
+            player.stats.rally += 6;
         },
         onClutch(player, baseStrength) { return baseStrength * 1.06; },
         onDeciding(player, baseStrength) { return baseStrength * 1.04; }
@@ -24,17 +24,17 @@ export const SKILLS = {
     /** 马龙: 六边形战士 — 全属性保底88，相持阶段+3% */
     六边形战士: {
         name: '六边形战士',
-        desc: '全属性保底92，相持+6',
+        desc: '全属性保底88，相持+4',
         onBeforeCalc(player) {
             const stats = player.stats;
-            stats.serve = Math.max(92, stats.serve);
-            stats.receive = Math.max(92, stats.receive);
-            stats.forehand = Math.max(92, stats.forehand);
-            stats.backhand = Math.max(92, stats.backhand);
-            stats.rally = Math.max(92, stats.rally);
+            stats.serve = Math.max(88, stats.serve);
+            stats.receive = Math.max(88, stats.receive);
+            stats.forehand = Math.max(88, stats.forehand);
+            stats.backhand = Math.max(88, stats.backhand);
+            stats.rally = Math.max(88, stats.rally);
             player.currentMentality = Math.max(player.stats.mentality * 0.92, player.currentMentality);
         },
-        onRally(player, baseStrength) { return baseStrength + 6; }
+        onRally(player, baseStrength) { return baseStrength + 4; }
     },
 
     /** 张继科: 藏獒觉醒 — 落后时爆发+12%，反手+3常驻 */

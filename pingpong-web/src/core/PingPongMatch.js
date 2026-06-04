@@ -234,6 +234,8 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
             base = SKILLS['太极'].onRally(player, base);
         if (player.skills.includes('欧洲之巅'))
             base = SKILLS['欧洲之巅'].onRally(player, base);
+        if (player.skills.includes('六边形战士'))
+            base = SKILLS['六边形战士'].onRally(player, base);
     }
 
     if (player.skills.includes('战术大师'))
