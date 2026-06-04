@@ -345,8 +345,6 @@ const goToRoster = () => {
   appState.value = 'roster'
 }
 
-const MAX_TEAM_SIZE = 5 // 队伍人数上限
-
 const openScout = () => {
   appState.value = 'scout'
 }
