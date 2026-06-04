@@ -678,7 +678,7 @@ const resetToMenu = () => {
         for (const p of trainable) {
           const candidates = ['serve','receive','forehand','backhand','rally']
             .filter(s => p.getTrainCost(s) < Infinity && p.getTrainCost(s) <= t.gold)
-            .sort((a, b) => p.getTrainCost(a) - p.getTrainCost(b)); // 优先最便宜的
+            .sort((a, b) => p.getTrainCost(b) - p.getTrainCost(a)); // 优先最贵的(核心球员强项)
           if (candidates.length === 0) continue;
           t.gold -= p.trainStat(candidates[0]);
           trained = true;
