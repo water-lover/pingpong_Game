@@ -240,6 +240,8 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
         base = SKILLS['战术大师'].onTacticBoost(player.currentTactic, base);
     if (player.skills.includes('智多星') && player.tacticChangedThisMatch)
         base = SKILLS['智多星'].onTacticChange(player, base);
+    if (player.skills.includes('游击队长'))
+        base = SKILLS['游击队长'].onTacticChange(player, base);
 
     base *= player.form;
     base *= Math.max(0.75, player.currentStamina / Math.max(1, player.stats.stamina));
@@ -263,7 +265,9 @@ function calcTacticStrength(player, role, isRallyPhase = false, vsPlayer = null)
         base = SKILLS['怪球手'].onConfuse(base);
     }
 
-    if (player.skills.includes('双胞胎兄') || player.skills.includes('双胞胎弟')) {
+    if (player.skills.includes('嘶吼') && player.consecutiveWins > 0) {
+        const momentum = SKILLS['嘶吼'].onMomentum(player, player.consecutiveWins);
+        base *= (1 + Math.min(momentum, 0.15));
     }
 
     base *= (0.85 + 0.15 * (player.currentMentality / Math.max(1, player.stats.mentality)));
