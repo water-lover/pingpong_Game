@@ -139,9 +139,10 @@ export const SKILLS = {
     /** 王皓: 直拍横打 — 反手视为正手计算 */
     直拍横打: {
         name: '直拍横打',
-        desc: '反手获得正手加成',
+        desc: '反手获得正手差值加成',
         onBeforeCalc(player) {
-            player.stats.backhand = Math.max(player.stats.backhand, player.stats.forehand - 3);
+            const diff = player.stats.forehand - player.stats.backhand;
+            player.stats.backhand += Math.max(2, Math.round(diff * 0.5));
         }
     },
 
@@ -248,10 +249,11 @@ export const SKILLS = {
     /** 丹羽孝溪: 佛系 — 心态始终100%，但体能消耗+10% */
     佛系: {
         name: '佛系',
-        desc: '心态恒定100%',
+        desc: '心态恒定100%，体能消耗+10%',
         onBeforeCalc(player) {
             player.currentMentality = 100;
-        }
+        },
+        onStaminaCost(cost) { return cost * 1.1; }
     },
 
     /** 方博: 拼命三郎 — 落后时+5% */

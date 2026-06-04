@@ -282,6 +282,8 @@ function getRNG(tid) {
 function getStaminaCost(player, mult) {
     let c = TACTICS[player.currentTactic].staCost * mult * 0.04;
     if (player.skills.includes('大力神')) c = SKILLS['大力神'].onStaminaCost(c);
+    if (player.skills.includes('铁人')) c = SKILLS['铁人'].onStaminaCost(c);
+    if (player.skills.includes('佛系')) c = SKILLS['佛系'].onStaminaCost(c);
     return c;
 }
 

@@ -40,7 +40,7 @@ export const starterGroups = [
         id: 'group_2', name: 'B组',
         players: [
             plainPlayer('马龙', { serve: 94, receive: 95, forehand: 100, backhand: 96, rally: 100, stamina: 92, mentality: 100, price: 1000 }),
-            plainPlayer('奥恰洛夫', { serve: 92, receive: 92, forehand: 91, backhand: 97, rally: 95, stamina: 93, mentality: 93, price: 700 }),
+            plainPlayer('奥恰洛夫', { serve: 92, receive: 92, forehand: 91, backhand: 95, rally: 95, stamina: 93, mentality: 93, price: 700 }),
             plainPlayer('萨姆索诺夫', { serve: 94, receive: 93, forehand: 98, backhand: 90, rally: 98, stamina: 88, mentality: 98, price: 800 }),
         ]
     },
@@ -67,7 +67,7 @@ export const freeAgentsPool = [
 
     // ═══ Price 600 ═══
     plainPlayer('雨果', { serve: 90, receive: 85, forehand: 94, backhand: 94, rally: 95, stamina: 93, mentality: 90, price: 600 }),
-    plainPlayer('松岛辉空', { serve: 96, receive: 90, forehand: 90, backhand: 97, rally: 93, stamina: 97, mentality: 90, price: 600 }),
+    plainPlayer('松岛辉空', { serve: 96, receive: 90, forehand: 90, backhand: 95, rally: 93, stamina: 97, mentality: 90, price: 600 }),
     plainPlayer('丹羽孝溪', { serve: 90, receive: 90, forehand: 90, backhand: 90, rally: 90, stamina: 80, mentality: 100, price: 600 }),
     plainPlayer('许昕', { serve: 92, receive: 83, forehand: 98, backhand: 74, rally: 91, stamina: 92, mentality: 80, price: 600 }),
     plainPlayer('林高远', { serve: 91, receive: 91, forehand: 94, backhand: 96, rally: 89, stamina: 96, mentality: 82, price: 600 }),
@@ -77,10 +77,10 @@ export const freeAgentsPool = [
     plainPlayer('方博', { serve: 90, receive: 82, forehand: 96, backhand: 82, rally: 88, stamina: 90, mentality: 72, price: 500 }),
 
     // ═══ Price 400 ═══
-    plainPlayer('阿鲁纳', { serve: 80, receive: 80, forehand: 96, backhand: 80, rally: 96, stamina: 98, mentality: 88, price: 400 }),
+    plainPlayer('阿鲁纳', { serve: 80, receive: 80, forehand: 94, backhand: 80, rally: 94, stamina: 98, mentality: 88, price: 400 }),
 
     // ═══ Price 200 ═══
-    plainPlayer('哈基阔', { serve: 100, receive: 70, forehand: 72, backhand: 72, rally: 70, stamina: 98, mentality: 98, price: 200 }),
+    plainPlayer('哈基阔', { serve: 95, receive: 70, forehand: 72, backhand: 72, rally: 70, stamina: 98, mentality: 98, price: 200 }),
 
     // ═══ Price 100 ═══
     plainPlayer('哈基羊', { serve: 70, receive: 70, forehand: 70, backhand: 70, rally: 60, stamina: 100, mentality: 100, price: 100 }),
