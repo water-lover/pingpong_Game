@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { Player, TeamMatch } from './core/PingPongMatch.js'
-import { freeAgentsPool, fanTeamRoster, getFullPlayerPool, snakeDraftToAITeams } from './data/gameData.js'
+import { fanTeamRoster, getFullPlayerPool, snakeDraftToAITeams } from './data/gameData.js'
 import { SKILLS } from './core/HiddenSkills.js'
 
 const MAX_ROUNDS = 10
@@ -41,7 +41,7 @@ const skillList = computed(() => Object.entries(SKILLS).map(([id, s]) => ({ id, 
 /** 反向查询：技能名 → 拥有该技能的球员列表 */
 const skillToPlayers = computed(() => {
   const map = {}
-  const allPlayers = [...freeAgentsPool]
+  const allPlayers = [...getFullPlayerPool()]
   leagueTeams.value.forEach(t => { if (t.id !== 'team_mine') allPlayers.push(...t.players) })
   myTeamPlayers.value.forEach(p => { if (!allPlayers.includes(p)) allPlayers.push(p) })
   allPlayers.forEach(p => {
@@ -96,8 +96,6 @@ const initGame = () => {
   draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
 };
 const draftablePool = ref([])
-initGame();
-
 const myTeamGold = ref(3700)
 const teamStats = ref({
   'team_mine': { name: '本质队', points: 0, wins: 0, losses: 0 },
@@ -107,6 +105,8 @@ const teamStats = ref({
   'team_b':    { name: '凌云队', points: 0, wins: 0, losses: 0 },
   'team_c':    { name: '雷霆队', points: 0, wins: 0, losses: 0 },
 })
+
+initGame();
 
 // 6队循环赛：每队与其他5队交手2次 = 10轮
 
@@ -308,6 +308,37 @@ const removeDrafted = (p) => {
   draftablePool.value.push(p);
   draftablePool.value.sort((a, b) => b.stats.price - a.stats.price);
 };
+
+
+/** 蛇形分配剩余球员给AI队伍 */
+const finishDraftAndDistribute = () => {
+  const remaining = [...draftablePool.value];
+  const aiTeamIds = ['team_eu', 'team_na', 'team_b', 'team_c'];
+  // 确保勒布伦兄弟在同一队
+  const lebronBrothers = remaining.filter(p => p.name.includes('勒布伦'));
+  if (lebronBrothers.length === 2) {
+    remaining.splice(remaining.indexOf(lebronBrothers[1]), 1);
+  }
+  const distributed = snakeDraftToAITeams(remaining, aiTeamIds);
+  // 如果勒布伦兄弟存在，把弟弟加到哥哥的队伍
+  if (lebronBrothers.length === 2) {
+    for (const id of aiTeamIds) {
+      if (distributed[id].find(p => p.name === lebronBrothers[0].name)) {
+        distributed[id].push(lebronBrothers[1]);
+        break;
+      }
+    }
+  }
+  aiTeamIds.forEach(id => {
+    const team = leagueTeams.value.find(t => t.id === id);
+    if (team) distributed[id].forEach(p => team.players.push(p));
+  });
+  const allDistributed = [];
+  aiTeamIds.forEach(id => allDistributed.push(...distributed[id]));
+  scoutPoolPlayers.value = remaining.filter(p => !allDistributed.includes(p));
+  appState.value = 'league';
+  saveGame();
+}
 
 const finishDrafting = () => {
   finishDraftAndDistribute();
