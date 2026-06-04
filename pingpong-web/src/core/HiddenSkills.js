@@ -65,13 +65,13 @@ export const SKILLS = {
         onTacticChange(player, baseStrength) { return baseStrength * 1.05; }
     },
 
-    /** 马琳: 战术大师 — 前三板和死盯落点战术效果+30% */
+    /** 马琳: 战术大师 — 前三板和死盯落点战术效果+12% */
     战术大师: {
         name: '战术大师',
-        desc: '前三板/死盯落点战术+30%效果',
+        desc: '前三板/死盯落点战术+12%效果',
         onTacticBoost(tacticId, baseStrength) {
             if (tacticId === 'first_three' || tacticId === 'target_weakness') {
-                return baseStrength * 1.30;
+                return baseStrength * 1.12;
             }
             return baseStrength;
         }
